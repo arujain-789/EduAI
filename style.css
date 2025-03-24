@@ -1,0 +1,66 @@
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #adadff;
+    overflow-x: hidden;
+}
+.header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+}
+.login-buttons {
+    display: flex;
+    gap: 10px;
+}
+.button {
+    padding: 10px 20px;
+    font-size: 16px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background-color 0.3s;
+}
+.button:hover {
+    background-color: #0056b3;
+}
+.front-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.logo-big {
+    font-size: 48px;
+    font-weight: bold;
+    color: #fff;
+}
+.key-points {
+    background-color: #fff;
+    padding: 20px;
+    margin: 80px auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    opacity: 0;
+    transform: translateY(50px);
+    transition: opacity 1s ease, transform 1s ease;
+}
+.key-points.visible {
+    opacity: 1;
+    transform: translateY(0);
+}

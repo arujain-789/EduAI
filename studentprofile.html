@@ -1,0 +1,27 @@
+<?php
+session_start();
+if (!isset($_SESSION['serial'])) {
+    header("Location: teacherlogin.html");
+    exit();
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Profile</title>
+    
+</head>
+<body>
+    <div class="card">
+        <div class="title">Teacher Profile</div>
+        <div class="info">
+            <p><strong>Name:</strong> Joe</p>
+            <p><strong>Class:</strong> 10th Grade</p>
+            <p><strong>Age:</strong> 15</p>
+        </div>
+        <button class="btn">View Report</button>
+    </div>
+</body>
+</html>

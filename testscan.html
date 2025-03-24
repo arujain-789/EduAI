@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Paper Scanner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        select, input, button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #FFBD59;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #FF914D;
+        }
+        table {
+            margin-top: 20px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #5271FF;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Upload Exam/Test Paper for AI Processing</h2>
+        <label for="class-select">Select Class:</label>
+        <select id="class-select">
+            <option value="10A">10 A</option>
+            <option value="10B">10 B</option>
+            <option value="11A">11 A</option>
+            <option value="11B">11 B</option>
+        </select>
+        <br>
+        <input type="file" id="file-upload" accept="image/*,application/pdf">
+        <br>
+        <button onclick="processFile()">Scan with AI</button>
+        <p id="output"></p>
+        
+        <h3>Mark List</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Marks Obtained</th>
+                </tr>
+            </thead>
+            <tbody id="mark-list">
+                <tr>
+                    <td>John Doe</td>
+                    <td>85</td>
+                </tr>
+                <tr>
+                    <td>Jane Smith</td>
+                    <td>92</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function processFile() {
+            const classSelected = document.getElementById('class-select').value;
+            const fileInput = document.getElementById('file-upload');
+            if (fileInput.files.length === 0) {
+                alert("Please upload a file first.");
+                return;
+            }
+            
+            document.getElementById('output').innerText = `Processing the exam paper for class ${classSelected}...`;
+            
+            setTimeout(() => {
+                document.getElementById('output').innerText = "AI scan completed! Extracted text and marks available.";
+            }, 2000); // Simulate AI processing delay
+        }
+    </script>
+</body>
+</html>
