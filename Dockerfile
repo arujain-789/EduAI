@@ -1,17 +1,13 @@
-# Use the official PHP Apache image
 FROM php:8.2-apache
 
-# Enable mod_rewrite (important for Laravel, WordPress, etc.)
-RUN a2enmod rewrite
+# Install dependencies
+RUN docker-php-ext-install mysqli pdo pdo_mysql
 
-# Set working directory
-WORKDIR /var/www/html
+# Copy website files
+COPY . /var/www/html/
 
-# Copy all project files to the container
-COPY . /var/www/html
-
-# Expose port 80 for web traffic
+# Expose port 80
 EXPOSE 80
 
-# Start Apache in the foreground
+# Start Apache
 CMD ["apache2-foreground"]
