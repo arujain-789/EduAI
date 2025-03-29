@@ -32,95 +32,97 @@
         <p id="aiFeedback"></p>
     </div>
 
-    <script>
-        document.getElementById("uploadForm").addEventListener("submit", async function (event) {
-            event.preventDefault();
-            const fileInput = document.getElementById("fileInput");
-            const uploadButton = document.getElementById("uploadButton");
-            const statusText = document.getElementById("status");
+   <script>
+       const SERVER_URL = "http://34.123.45.67:3000";  // Replace with your VM's external IP
 
-            if (!fileInput.files.length) {
-                alert("Please select a file.");
-                return;
-            }
+document.getElementById("uploadForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const fileInput = document.getElementById("fileInput");
+    const uploadButton = document.getElementById("uploadButton");
+    const statusText = document.getElementById("status");
 
-            uploadButton.disabled = true;
-            statusText.textContent = "Uploading... ⏳";
+    if (!fileInput.files.length) {
+        alert("Please select a file.");
+        return;
+    }
 
-            const formData = new FormData();
-            formData.append("pdf", fileInput.files[0]);
+    uploadButton.disabled = true;
+    statusText.textContent = "Uploading... ⏳";
 
-            try {
-                const response = await fetch("http://localhost:3000/upload", {
-                    method: "POST",
-                    body: formData,
-                });
+    const formData = new FormData();
+    formData.append("pdf", fileInput.files[0]);
 
-                if (!response.ok) {
-                    throw new Error("Upload failed.");
-                }
-
-                const result = await response.json();
-                const uploadedFileName = result.filename;
-                localStorage.setItem("uploadedFile", uploadedFileName);
-
-                alert("File uploaded successfully!");
-                loadPDFs(uploadedFileName);  
-                fetchAIResponse();  // Fetch AI marks & feedback
-
-            } catch (error) {
-                console.error("Error uploading file:", error);
-                alert("Upload failed! ❌");
-            } finally {
-                uploadButton.disabled = false;
-                statusText.textContent = "";
-            }
+    try {
+        const response = await fetch(`${SERVER_URL}/upload`, {  // Use external IP here
+            method: "POST",
+            body: formData,
         });
 
-        async function loadPDFs(highlightFile = "") {
-            try {
-                const response = await fetch("http://localhost:3000/list");
-                if (!response.ok) throw new Error("Failed to fetch PDFs");
-
-                const files = await response.json();
-                const pdfList = document.getElementById("pdfList");
-                pdfList.innerHTML = "";
-
-                files.forEach(file => {
-                    const li = document.createElement("li");
-                    const link = document.createElement("a");
-                    link.href = `http://localhost:3000/uploads/${file}`;
-                    link.textContent = file;
-                    link.target = "_blank";
-
-                    if (file === highlightFile) {
-                        li.classList.add("highlight");
-                    }
-
-                    li.appendChild(link);
-                    pdfList.appendChild(li);
-                });
-            } catch (error) {
-                console.error("Error loading PDFs:", error);
-            }
+        if (!response.ok) {
+            throw new Error("Upload failed.");
         }
 
-        async function fetchAIResponse() {
-            try {
-                const response = await fetch("http://localhost:3000/ai-output");
-                if (!response.ok) throw new Error("Failed to fetch AI output");
+        const result = await response.json();
+        const uploadedFileName = result.filename;
+        localStorage.setItem("uploadedFile", uploadedFileName);
 
-                const data = await response.json();
-                document.getElementById("marks").textContent = data.marks;
-                document.getElementById("aiFeedback").textContent = data.feedback;
-                document.getElementById("feedback").style.display = "block";
-            } catch (error) {
-                console.error("Error fetching AI feedback:", error);
+        alert("File uploaded successfully!");
+        loadPDFs(uploadedFileName);  
+        fetchAIResponse();  // Fetch AI marks & feedback
+
+    } catch (error) {
+        console.error("Error uploading file:", error);
+        alert("Upload failed! ❌");
+    } finally {
+        uploadButton.disabled = false;
+        statusText.textContent = "";
+    }
+});
+
+async function loadPDFs(highlightFile = "") {
+    try {
+        const response = await fetch(`${SERVER_URL}/list`); // Use external IP
+        if (!response.ok) throw new Error("Failed to fetch PDFs");
+
+        const files = await response.json();
+        const pdfList = document.getElementById("pdfList");
+        pdfList.innerHTML = "";
+
+        files.forEach(file => {
+            const li = document.createElement("li");
+            const link = document.createElement("a");
+            link.href = `${SERVER_URL}/uploads/${file}`;  // Correct path
+            link.textContent = file;
+            link.target = "_blank";
+
+            if (file === highlightFile) {
+                li.classList.add("highlight");
             }
-        }
 
-        loadPDFs();  
-    </script>
+            li.appendChild(link);
+            pdfList.appendChild(li);
+        });
+    } catch (error) {
+        console.error("Error loading PDFs:", error);
+    }
+}
 
+async function fetchAIResponse() {
+    try {
+        const response = await fetch(`${SERVER_URL}/ai-output`);  // Use external IP
+        if (!response.ok) throw new Error("Failed to fetch AI output");
+
+        const data = await response.json();
+        document.getElementById("marks").textContent = data.marks;
+        document.getElementById("aiFeedback").textContent = data.feedback;
+        document.getElementById("feedback").style.display = "block";
+    } catch (error) {
+        console.error("Error fetching AI feedback:", error);
+    }
+}
+
+loadPDFs();  
+
+   </script>
 </body>
 </html>
