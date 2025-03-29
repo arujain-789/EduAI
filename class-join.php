@@ -6,7 +6,7 @@ if (!isset($_SESSION['serial'])) {
 }
 
 // Database Connection
-$conn = new mysqli("localhost", "root", "", "teacherdetail");
+$conn = new mysqli("34.47.230.235", "EduAI", "Arujain@789", "teacherdetails");
 
 if ($conn->connect_error) {
     die("Database connection failed: " . $conn->connect_error);
