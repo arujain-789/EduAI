@@ -14,7 +14,7 @@ import io
 import sys
 import re
 sys.stdout.reconfigure(encoding='utf-8')
-
+API_KEY = os.getenv("API_KEY")
 # 🔹 Set Tesseract OCR path
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -92,7 +92,7 @@ if extracted_text.strip():
     gemini_prompt = "Use the following context to answer the question. If you don't know, say 'I don't know' and don't make it up."
     input_prompt = f"{gemini_prompt}\nContext: {relevant_search}\nUser Question: {FIXED_PROMPT}"
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", api_key="AIzaSyBFKPqM2mCU43VPvkOYQQwx62QrLNJwkpE")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", api_key=API_KEY)
     result = llm.invoke(input_prompt)
 
     ai_response = result.content
