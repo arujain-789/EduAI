@@ -12,7 +12,7 @@ EXPOSE 80
 # Start Apache
 CMD ["apache2-foreground"]
 # Use an official Node.js runtime as a parent image
-FROM node:16
+FROM node:18
 
 # Set the working directory in the container
 WORKDIR /usr/src/app
