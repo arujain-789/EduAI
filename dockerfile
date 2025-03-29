@@ -1,20 +1,17 @@
-# Use an official Node.js image as base
-FROM node:18
+# Use an official Node.js runtime as a parent image
+FROM node:16
 
-# Set the working directory
-WORKDIR /app
+# Set the working directory in the container
+WORKDIR /usr/src/app
 
-# Copy package files and install Node.js dependencies
-COPY package.json package-lock.json ./
-RUN npm install
-
-# Copy Python requirements and install Python dependencies
-COPY requirements.txt ./
-RUN apt-get update && apt-get install -y python3 python3-pip
-RUN pip3 install -r requirements.txt
-
-# Copy the rest of your project
+# Copy the current directory contents into the container at /usr/src/app
 COPY . .
 
-# Start both Node.js and Python processes
-CMD ["sh", "-c", "node server.js & python3 script.py"]
+# Install dependencies
+RUN npm install
+
+# Make port 3000 available to the world outside this container
+EXPOSE 3000
+
+# Define the command to run your app
+CMD ["npm", "start"]
