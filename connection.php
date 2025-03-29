@@ -8,7 +8,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $subject = $_POST['subject'];
 
     // Database connection
-    $conn = new mysqli("34.47.230.235", "root", "Arujain@789", "teacherdetails");
+    $conn = new mysqli("34.47.230.235", "EduAI", "Arujain@789", "teacherdetails");
 
     if ($conn->connect_error) {
         die("Connection failed: " . $conn->connect_error);
