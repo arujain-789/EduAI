@@ -1,5 +1,7 @@
 <?php
+ob_start(); // Start output buffering
 session_start();
+
 if (!isset($_SESSION['serial'])) {
     header("Location: student-login.html");
     exit();
@@ -33,7 +35,7 @@ if ($stmt->num_rows > 0) {
     $student = $result->fetch_assoc();
     
     // Append new code if not already in list
-    $existing_codes = explode(",", $student['code']);
+    $existing_codes = explode(",", $student['code'] ?? '');
     if (!in_array($code, $existing_codes)) {
         $existing_codes[] = $code; // Add new code
     }
@@ -47,8 +49,7 @@ if ($stmt->num_rows > 0) {
     $stmt_update->bind_param("si", $new_code_list, $serial);
 
     if ($stmt_update->execute()) {
-        echo "Class joined successfully!";
-        header("Location: class-join.php");
+        header("Location: class-join.php"); // Redirect without echoing anything
         exit();
     } else {
         echo "Error updating record: " . $conn->error;
@@ -59,4 +60,5 @@ if ($stmt->num_rows > 0) {
 
 $stmt->close();
 $conn->close();
+ob_end_flush(); // Flush output buffer
 ?>
