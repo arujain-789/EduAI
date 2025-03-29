@@ -10,6 +10,6 @@
     "tesseract.js": "^6.0.0"
   },
   "scripts": {
-    "start": "node script1.js & node script2.js & node script3.js"
+    "start": "node server1.js & node server.js & node script3.js"
   }
 }
