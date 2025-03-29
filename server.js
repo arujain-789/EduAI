@@ -11,10 +11,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("uploads"));
 
+
 // 🔹 Ensure "uploads" directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
+console.log(`Uploads folder path: ${uploadDir}`);
 // 🔹 Multer Storage Config
 const storage = multer.diskStorage({
     destination: uploadDir,
@@ -33,7 +34,7 @@ app.post("/upload", upload.single("pdf"), (req, res) => {
     console.log(`📂 Uploaded: ${req.file.filename}`);
     const filePath = path.join(__dirname, "uploads", req.file.filename);
     
-    exec(`python server1.py "${filePath}"`, (error, stdout, stderr) => {
+    exec(`python3 server1.py "${filePath}"`, (error, stdout, stderr) => {
         if (error) {
             console.error(`❌ AI Processing Error: ${error.message}`);
             return res.status(500).json({ error: "AI processing failed!" });
