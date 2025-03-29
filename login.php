@@ -2,7 +2,7 @@
 session_start();
 
 // Database connection
-$conn = new mysqli("localhost", "root", "", "teacherdetail");
+$conn = new mysqli("34.47.230.235", "EduAI", "Arujain@789", "teacherdetails");
 
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
