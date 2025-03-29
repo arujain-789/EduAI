@@ -1,20 +1,20 @@
 <?php
 session_start();
-ob_start();  // Start output buffering
+ob_start();  // Start output buffering to prevent header issues
 
-// Secure Database Connection
+// Database connection
 $conn = new mysqli("34.47.230.235", "EduAI", "Arujain@789", "teacherdetails");
 
 // Check connection
 if ($conn->connect_error) {
-    die("Database Connection Failed: " . $conn->connect_error);
+    die("<script>alert('Database Connection Failed!'); window.history.back();</script>");
 }
 
-// Get user input safely
+// Get user input
 $email = trim($_POST['email']);
 $password = trim($_POST['password']);
 
-// Fetch user data from database securely
+// Prevent SQL Injection
 $sql = "SELECT * FROM teacherdetails WHERE email = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("s", $email);
@@ -28,8 +28,8 @@ if ($result->num_rows === 0) {
 
 $row = $result->fetch_assoc();
 
-// Secure password verification (if stored using password_hash)
-if (password_verify($password, $row["password"])) {  
+// ✅ Directly Compare Passwords (No Hashing)
+if ($password === $row["password"]) {  
     $_SESSION['serial'] = $row['serial'];
     $_SESSION['username'] = $row['username'];
     $_SESSION['email'] = $row['email'];
