@@ -1,53 +1,50 @@
 <?php
 session_start();
+ob_start();  // Start output buffering
 
-// Database connection
+// Secure Database Connection
 $conn = new mysqli("34.47.230.235", "EduAI", "Arujain@789", "teacherdetails");
 
+// Check connection
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    die("Database Connection Failed: " . $conn->connect_error);
 }
 
-// Get user input
-$email = $_POST['email'];
-$password = $_POST['password'];
+// Get user input safely
+$email = trim($_POST['email']);
+$password = trim($_POST['password']);
 
-// Debugging: Print user input
-echo "DEBUG: Email entered - " . $email . "<br>";
-
-// Fetch user data from database
+// Fetch user data from database securely
 $sql = "SELECT * FROM teacherdetails WHERE email = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("s", $email);
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Debugging: Check if any rows were returned
-if ($result->num_rows == 0) {
-    die("<script>alert('User not found! Please register.'); window.history.back();</script>");
+if ($result->num_rows === 0) {
+    echo "<script>alert('User not found! Please register.'); window.history.back();</script>";
+    exit();
 }
 
 $row = $result->fetch_assoc();
 
-// Debugging: Print retrieved password
-echo "DEBUG: Password in database - " . $row['password'] . "<br>";
-
-// ✅ Directly compare passwords (since you're not using hashing)
-if ($password === $row["password"]) {
+// Secure password verification (if stored using password_hash)
+if (password_verify($password, $row["password"])) {  
     $_SESSION['serial'] = $row['serial'];
     $_SESSION['username'] = $row['username'];
     $_SESSION['email'] = $row['email'];
     $_SESSION['school'] = $row['school'];
-
 
     // Redirect to dashboard
     header("Location: classlist.php");
     exit();
 } else {
     echo "<script>alert('Incorrect password!'); window.history.back();</script>";
+    exit();
 }
 
 // Close connections
 $stmt->close();
 $conn->close();
+ob_end_flush();  // Flush output buffer
 ?>
