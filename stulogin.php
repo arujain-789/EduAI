@@ -7,12 +7,9 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Get user input
-$email = $_POST['email'];
+// Get user input safely
+$email = trim($_POST['email']);
 $password = $_POST['password'];
-
-// Debugging: Print user input
-echo "DEBUG: Email entered - " . $email . "<br>";
 
 // Fetch user data from database
 $sql = "SELECT * FROM studentdetail WHERE email = ?";
@@ -21,18 +18,17 @@ $stmt->bind_param("s", $email);
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Debugging: Check if any rows were returned
+// Check if user exists
 if ($result->num_rows == 0) {
-    die("<script>alert('User not found! Please register.'); window.history.back();</script>");
+    echo "<script>alert('User not found! Please register.'); window.history.back();</script>";
+    exit();
 }
 
 $row = $result->fetch_assoc();
 
-// Debugging: Print retrieved password
-echo "DEBUG: Password in database - " . $row['password'] . "<br>";
-
-// ✅ Directly compare passwords (since you're not using hashing)
-if ($password === $row["password"]) {
+// ✅ Direct password comparison (No Hashing)
+if ($password === $row["password"]) {  
+    // Store user details in session
     $_SESSION['serial'] = $row['serial'];
     $_SESSION['name'] = $row['name'];
     $_SESSION['email'] = $row['email'];
@@ -40,7 +36,7 @@ if ($password === $row["password"]) {
     $_SESSION['class'] = $row['class'];
     $_SESSION['section'] = $row['section'];
 
-    // Redirect to dashboard
+    // ✅ Redirect without any output before header()
     header("Location: studentprofile.php");
     exit();
 } else {
