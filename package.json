@@ -1,12 +1,15 @@
 {
-   "type": "module",
-   "dependencies": {
-      "@google/generative-ai": "^0.24.0",
-      "dotenv": "^16.4.7",
-      "fs": "^0.0.1-security",
-      "pdf-parse": "^1.1.1",
-      "pdf2pic": "^3.1.4",
-      "pdfjs-dist": "^5.0.375",
-      "tesseract.js": "^6.0.0"
-   }
+  "type": "module",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "dotenv": "^16.4.7",
+    "fs": "^0.0.1-security",
+    "pdf-parse": "^1.1.1",
+    "pdf2pic": "^3.1.4",
+    "pdfjs-dist": "^5.0.375",
+    "tesseract.js": "^6.0.0"
+  },
+  "scripts": {
+    "start": "node script1.js & node script2.js & node script3.js"
+  }
 }
