@@ -1,42 +1,12 @@
+const express = require('express');
+const app = express();
+const path = require('path');
 
-import com.google.cloud.vertexai.VertexAI;
-import com.google.cloud.vertexai.api.GenerateContentResponse;
-import com.google.cloud.vertexai.generativeai.ContentMaker;
-import com.google.cloud.vertexai.generativeai.GenerativeModel;
-import com.google.cloud.vertexai.generativeai.PartMaker;
-import com.google.cloud.vertexai.generativeai.ResponseHandler;
-import java.io.IOException;
+app.use(express.static('public'));
 
-public class PdfInput {
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-  public static void main(String[] args) throws IOException {
-    // TODO(developer): Replace these variables before running the sample.
-    String projectId = "your-google-cloud-project-id";
-    String location = "us-central1";
-    String modelName = "gemini-1.5-flash-001";
-
-    pdfInput(projectId, location, modelName);
-  }
-
-  // Analyzes the given video input.
-  public static String pdfInput(String projectId, String location, String modelName)
-      throws IOException {
-    // Initialize client that will be used to send requests. This client only needs
-    // to be created once, and can be reused for multiple requests.
-    try (VertexAI vertexAI = new VertexAI(projectId, location)) {
-      String pdfUri = "gs://cloud-samples-data/generative-ai/pdf/2403.05530.pdf";
-
-      GenerativeModel model = new GenerativeModel(modelName, vertexAI);
-      GenerateContentResponse response = model.generateContent(
-          ContentMaker.fromMultiModalData(
-              "You are a very professional document summarization specialist.\n"
-                  + "Please summarize the given document.",
-              PartMaker.fromMimeTypeAndData("application/pdf", pdfUri)
-          ));
-
-      String output = ResponseHandler.getText(response);
-      System.out.println(output);
-      return output;
-    }
-  }
-}
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
