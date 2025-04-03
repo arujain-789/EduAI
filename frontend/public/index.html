@@ -290,7 +290,7 @@
     }
 
     // ✅ Test backend connection
-    fetch(`${SERVER_URL}/api/test`)
+    fetch(`${SERVER_URL}/test`)
         .then(response => response.ok ? response.json() : Promise.reject('Backend offline'))
         .then(data => console.log('Backend connected:', data))
         .catch(error => {
