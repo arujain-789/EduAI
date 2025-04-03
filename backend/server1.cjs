@@ -73,23 +73,34 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
     console.log(`✅ File uploaded: ${fileName}`);
 
     // Call Python script for grading
-    const pythonProcess = spawn("python3", [pythonScriptPath, signedUrl]);
+    let pythonProcess;
+    try {
+      pythonProcess = spawn("python3", [pythonScriptPath, signedUrl]);
+    } catch (err) {
+      console.error("❌ Failed to start Python script:", err);
+      return res.status(500).json({ error: "AI process failed to start" });
+    }
 
     let aiResponse = "";
+    let aiError = "";
 
     pythonProcess.stdout.on("data", (data) => {
       aiResponse += data.toString();
     });
 
     pythonProcess.stderr.on("data", (data) => {
-      console.error("❌ AI Error:", data.toString());
-      res.status(500).json({ error: "AI processing failed" });
+      aiError += data.toString();
     });
 
     pythonProcess.on("close", () => {
+      if (aiError) {
+        console.error("❌ AI Error:", aiError);
+        return res.status(500).json({ error: "AI processing failed", details: aiError });
+      }
+
       try {
         const parsedResponse = JSON.parse(aiResponse);
-        res.json({
+        return res.json({
           message: "✅ Success!",
           url: signedUrl,
           filename: fileName,
@@ -98,13 +109,13 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
         });
       } catch (err) {
         console.error("❌ AI Response Error:", err);
-        res.status(500).json({ error: "Invalid AI response" });
+        return res.status(500).json({ error: "Invalid AI response" });
       }
     });
 
   } catch (err) {
     console.error("❌ Upload Error:", err);
-    res.status(500).json({ error: "Upload failed" });
+    return res.status(500).json({ error: "Upload failed" });
   }
 });
 
