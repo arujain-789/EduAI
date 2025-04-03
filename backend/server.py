@@ -92,7 +92,7 @@ if extracted_text.strip():
     docs = db.similarity_search(FIXED_PROMPT)
     context = "\n".join([doc.page_content for doc in docs])
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", api_key=API_KEY)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=API_KEY)
     result = llm.invoke(f"Context: {context}\nPrompt: {FIXED_PROMPT}")
 
     # Extract marks and feedback
