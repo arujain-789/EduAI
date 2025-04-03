@@ -119,254 +119,185 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Configuration
-        const SERVER_URL = "";
-        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    // Configuration
+    const SERVER_URL = "https://eduai-1.onrender.com"; // Ensure backend URL is correct
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-        // DOM Elements
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const browseBtn = document.getElementById('browseBtn');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const progressPercent = document.getElementById('progressPercent');
-        const resultsDiv = document.getElementById('results');
-        const fileList = document.getElementById('fileList');
-        const emptyState = document.getElementById('emptyState');
-        const statusBadge = document.getElementById('statusBadge');
+    // DOM Elements
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const browseBtn = document.getElementById('browseBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const resultsDiv = document.getElementById('results');
+    const fileList = document.getElementById('fileList');
+    const emptyState = document.getElementById('emptyState');
+    const statusBadge = document.getElementById('statusBadge');
 
-        // Initialize
-        loadFileList();
+    // Initialize
+    loadFileList();
 
-        // Event Listeners
-        browseBtn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', handleFileSelect);
+    // Event Listeners
+    browseBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileSelect);
 
-        // Drag and Drop Handlers
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-            document.body.addEventListener(eventName, preventDefaults, false);
-        });
+    // Drag & Drop Listeners
+    ['dragenter', 'dragover'].forEach(event => dropZone.addEventListener(event, highlight));
+    ['dragleave', 'drop'].forEach(event => dropZone.addEventListener(event, unhighlight));
+    dropZone.addEventListener('drop', handleDrop);
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, highlight, false);
-        });
+    function highlight() {
+        dropZone.classList.add('dragover');
+        updateStatus("Drop PDF", "warning");
+    }
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, unhighlight, false);
-        });
+    function unhighlight() {
+        dropZone.classList.remove('dragover');
+        updateStatus("Ready", "light");
+    }
 
-        dropZone.addEventListener('drop', handleDrop, false);
+    function handleDrop(e) {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    }
 
-        // Functions
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+    function handleFileSelect() {
+        if (fileInput.files.length) handleFiles(fileInput.files);
+    }
 
-        function highlight() {
-            dropZone.classList.add('dragover');
-            updateStatus("Drop PDF", "warning");
-        }
+    async function handleFiles(files) {
+        const file = files[0];
 
-        function unhighlight() {
-            dropZone.classList.remove('dragover');
-            updateStatus("Ready", "light");
-        }
+        if (!file) return updateStatus("No file selected", "danger");
+        if (file.type !== "application/pdf") return updateStatus("Only PDFs allowed", "danger");
+        if (file.size > MAX_FILE_SIZE) return updateStatus("File too large (max 10MB)", "danger");
 
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length) {
-                handleFiles(files);
-            }
-        }
+        updateStatus("Uploading...", "info");
+        showProgress();
 
-        function handleFileSelect() {
-            if (fileInput.files.length) {
-                handleFiles(fileInput.files);
-            }
-        }
+        const formData = new FormData();
+        formData.append('pdf', file);
 
-        async function handleFiles(files) {
-            const file = files[0];
-            
-            // Validation
-            if (!file) {
-                updateStatus("No file selected", "danger");
-                return;
-            }
-            
-            if (file.type !== "application/pdf") {
-                updateStatus("Only PDF files allowed", "danger");
-                return;
-            }
-            
-            if (file.size > MAX_FILE_SIZE) {
-                updateStatus("File too large (max 10MB)", "danger");
-                return;
-            }
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${SERVER_URL}/upload`, true);  // Open first
+            xhr.setRequestHeader('Accept', 'application/json');  // Set headers before sending
 
-            // Upload process
-            updateStatus("Uploading...", "info");
-            showProgress();
-
-            const formData = new FormData();
-            formData.append('pdf', file);
-
-            try {
-                
-                const xhr = new XMLHttpRequest();
-xhr.open('POST', '/upload', true);  // First open
-xhr.setRequestHeader('Accept', 'application/json');  // Then set headers
-xhr.send(formData);  // Finally send
-                // Progress tracking
-                xhr.upload.addEventListener('progress', (e) => {
-                    if (e.lengthComputable) {
-                        const percent = Math.round((e.loaded / e.total) * 100);
-                        updateProgress(percent);
-                    }
-                });
-
-                // Completion handler
-                xhr.onload = function() {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const response = JSON.parse(xhr.responseText);
-                            processSuccess(response);
-                        } catch (e) {
-                            console.error("Response parsing error:", e);
-                            updateStatus("Invalid server response", "danger");
-                        }
-                    } else {
-                        handleUploadError(xhr);
-                    }
-                    hideProgress();
-                };
-
-                // Error handler
-                xhr.onerror = function() {
-                    updateStatus("Network error", "danger");
-                    hideProgress();
-                };
-                xhr.setRequestHeader('Accept', 'application/json');
-                // In your handleFiles() function, you're missing the xhr.open() call!
-// Add this before xhr.send():
-xhr.open('POST', '/upload', true);  // Relative path
-xhr.setRequestHeader('Accept', 'application/json');
-                xhr.send(formData);
-
-            } catch (error) {
-                console.error('Upload error:', error);
-                updateStatus("Upload failed", "danger");
-                hideProgress();
-            }
-        }
-
-        function handleUploadError(xhr) {
-            let errorMsg = "Upload failed";
-            try {
-                const errorResponse = JSON.parse(xhr.responseText);
-                if (errorResponse.error) {
-                    errorMsg = errorResponse.error;
+            // Track progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    updateProgress(Math.round((e.loaded / e.total) * 100));
                 }
-            } catch (e) {
-                console.error("Error response parsing failed:", e);
-            }
-            updateStatus(errorMsg, "danger");
-        }
+            });
 
-        function updateProgress(percent) {
-            progressBar.style.width = `${percent}%`;
-            progressPercent.textContent = percent;
-            if (percent === 100) {
-                progressBar.classList.remove('progress-bar-animated');
-                updateStatus("Processing with AI...", "info");
-            }
-        }
+            xhr.onload = function () {
+                hideProgress();
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        processSuccess(JSON.parse(xhr.responseText));
+                    } catch (e) {
+                        console.error("Response parsing error:", e);
+                        updateStatus("Invalid server response", "danger");
+                    }
+                } else {
+                    handleUploadError(xhr);
+                }
+            };
 
-        function showProgress() {
-            progressContainer.classList.remove('d-none');
-            resultsDiv.classList.add('d-none');
-        }
+            xhr.onerror = function () {
+                updateStatus("Network error", "danger");
+                hideProgress();
+            };
 
-        function hideProgress() {
-            progressContainer.classList.add('d-none');
+            xhr.send(formData); // Send after headers are set
+        } catch (error) {
+            console.error('Upload error:', error);
+            updateStatus("Upload failed", "danger");
+            hideProgress();
         }
+    }
 
-        function updateStatus(text, type) {
-            statusBadge.textContent = text;
-            statusBadge.className = `badge status-badge bg-${type} ${type === 'light' ? 'text-primary' : 'text-white'}`;
+    function updateProgress(percent) {
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = percent;
+        if (percent === 100) {
+            progressBar.classList.remove('progress-bar-animated');
+            updateStatus("Processing with AI...", "info");
         }
+    }
 
-        function processSuccess(response) {
-            updateStatus("Grading complete", "success");
-            
-            // Display results
-            document.getElementById('marks').textContent = response.marks || "N/A";
-            document.getElementById('feedback').textContent = response.feedback || "No feedback available.";
-            document.getElementById('pdfLink').href = response.url || "#";
-            resultsDiv.classList.remove('d-none');
-            
-            // Add to file list
-            if (response.filename) {
-                addFileToList(response.filename, response.url);
-                loadFileList();
-            }
+    function showProgress() {
+        progressContainer.classList.remove('d-none');
+        resultsDiv.classList.add('d-none');
+    }
+
+    function hideProgress() {
+        progressContainer.classList.add('d-none');
+    }
+
+    function updateStatus(text, type) {
+        statusBadge.textContent = text;
+        statusBadge.className = `badge status-badge bg-${type} ${type === 'light' ? 'text-primary' : 'text-white'}`;
+    }
+
+    function processSuccess(response) {
+        updateStatus("Grading complete", "success");
+
+        document.getElementById('marks').textContent = response.marks || "N/A";
+        document.getElementById('feedback').textContent = response.feedback || "No feedback available.";
+        document.getElementById('pdfLink').href = response.url || "#";
+        resultsDiv.classList.remove('d-none');
+
+        if (response.filename) {
+            addFileToList(response.filename, response.url);
+            loadFileList();
         }
+    }
 
-        function addFileToList(filename, url) {
-            const files = JSON.parse(localStorage.getItem('gradedFiles')) || [];
-            if (!files.some(file => file.name === filename)) {
-                files.push({
-                    name: filename,
-                    url: url,
-                    date: new Date().toISOString()
-                });
-                localStorage.setItem('gradedFiles', JSON.stringify(files));
-            }
+    function addFileToList(filename, url) {
+        const files = JSON.parse(localStorage.getItem('gradedFiles')) || [];
+        if (!files.some(file => file.name === filename)) {
+            files.push({ name: filename, url, date: new Date().toISOString() });
+            localStorage.setItem('gradedFiles', JSON.stringify(files));
         }
+    }
 
-        function loadFileList() {
-            const files = JSON.parse(localStorage.getItem('gradedFiles')) || [];
-            
-            if (files.length) {
-                emptyState.classList.add('d-none');
-                fileList.innerHTML = '';
-                
-                files.forEach(file => {
-                    const fileDate = new Date(file.date).toLocaleString();
-                    const listItem = document.createElement('a');
-                    listItem.href = file.url || "#";
-                    listItem.target = '_blank';
-                    listItem.className = 'list-group-item list-group-item-action file-list-item d-flex justify-content-between align-items-center';
-                    listItem.innerHTML = `
-                        <div>
-                            <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
-                            ${file.name}
-                            <div class="text-muted small">${fileDate}</div>
-                        </div>
-                        <i class="bi bi-box-arrow-up-right text-muted"></i>
-                    `;
-                    fileList.appendChild(listItem);
-                });
-            } else {
-                emptyState.classList.remove('d-none');
-            }
+    function loadFileList() {
+        const files = JSON.parse(localStorage.getItem('gradedFiles')) || [];
+        fileList.innerHTML = '';
+
+        if (files.length) {
+            emptyState.classList.add('d-none');
+            files.forEach(file => {
+                const listItem = document.createElement('a');
+                listItem.href = file.url || "#";
+                listItem.target = '_blank';
+                listItem.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                listItem.innerHTML = `
+                    <div>
+                        <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                        ${file.name}
+                        <div class="text-muted small">${new Date(file.date).toLocaleString()}</div>
+                    </div>
+                    <i class="bi bi-box-arrow-up-right text-muted"></i>
+                `;
+                fileList.appendChild(listItem);
+            });
+        } else {
+            emptyState.classList.remove('d-none');
         }
+    }
 
-        // Test backend connection on load
-        // Replace the test fetch with:
-fetch('/api/test')  // Relative path (no domain needed)
-  .then(response => {
-    if (!response.ok) throw new Error('Backend offline');
-    return response.json();
-  })
-  .then(data => console.log('Backend connection:', data))
-  .catch(error => {
-    console.error("Connection test failed:", error);
-    updateStatus("Backend unavailable", "danger");
-  });
-    </script>
+    // ✅ Test backend connection
+    fetch(`${SERVER_URL}/api/test`)
+        .then(response => response.ok ? response.json() : Promise.reject('Backend offline'))
+        .then(data => console.log('Backend connected:', data))
+        .catch(error => {
+            console.error("Connection test failed:", error);
+            updateStatus("Backend unavailable", "danger");
+        });
+</script>
+
 </body>
 </html>
