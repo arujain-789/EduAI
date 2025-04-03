@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ✅ Decode Service Account Credentials from Base64 (Render)
-creds_json = process.env('GCS_CREDENTIALS')
+creds_json = process.env.GCS_CREDENTIALS;
 credentials = service_account.Credentials.from_service_account_info(
     json.loads(creds_json))
 let credentials;
