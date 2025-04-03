@@ -9,6 +9,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from pdf2image import convert_from_bytes
 from google.cloud import vision
+import os
 
 # 🛠 Debugging
 print("📝 Received arguments:", sys.argv)
@@ -33,9 +34,24 @@ def download_pdf(url):
 
 pdf_buffer = download_pdf(gcs_url)
 
+service_account_json = os.getenv("API_KEY")
+
+if not service_account_json:
+    print("❌ Error: API_KEY not found in environment variables")
+
+    
+    exit(1)
+
+
+    cred_path = "/tmp/service-account.json"
+with open(cred_path, "w") as f:
+    f.write(service_account_json)
+
+
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
 # 🔹 Initialize Google Vision OCR
 client = vision.ImageAnnotatorClient()
-API_KEY = os.getenv("API_KEY")  # Set in Render's environment
+  # Set in Render's environment
 
 # 🔹 Extract text using Google Vision OCR (for scanned PDFs)
 def google_vision_ocr(image_bytes):
