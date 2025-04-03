@@ -25,30 +25,34 @@ const bucket = storage.bucket(bucketName);
 const pythonScriptPath = process.env.PYTHON_SCRIPT_PATH || "./server.py";
 
 // ✅ CORS Configuration
-app.use(cors({
-  origin: ['https://www.eduai2025.app', 'https://eduai2025.app'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept'],
-  credentials: true
-}));
+const corsOptions = {
+  origin: ["https://www.eduai2025.app", "https://eduai2025.app"],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Handle Preflight Requests (CORS)
+// ✅ Explicitly Set CORS Headers (Preflight Handling)
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://www.eduai2025.app");
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "https://www.eduai2025.app");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   res.header("Access-Control-Allow-Credentials", "true");
+  
   if (req.method === "OPTIONS") return res.sendStatus(200);
+  
   next();
 });
 
 // ✅ Multer Storage Configuration (for memory storage)
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 // ✅ Upload Route
@@ -73,14 +77,8 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
     console.log(`✅ File uploaded: ${fileName}`);
 
     // Call Python script for grading
-    let pythonProcess;
-    try {
-      pythonProcess = spawn("python3", [pythonScriptPath, signedUrl]);
-    } catch (err) {
-      console.error("❌ Failed to start Python script:", err);
-      return res.status(500).json({ error: "AI process failed to start" });
-    }
-
+    const pythonProcess = spawn("python3", [pythonScriptPath, signedUrl]);
+    
     let aiResponse = "";
     let aiError = "";
 
@@ -92,7 +90,7 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
       aiError += data.toString();
     });
 
-    pythonProcess.on("close", () => {
+    pythonProcess.on("close", (code) => {
       if (aiError) {
         console.error("❌ AI Error:", aiError);
         return res.status(500).json({ error: "AI processing failed", details: aiError });
@@ -132,6 +130,11 @@ app.get("/list", async (req, res) => {
 
 // ✅ Test Route
 app.get("/test", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "https://www.eduai2025.app");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
   res.json({ status: "Backend connected", timestamp: new Date() });
 });
 
@@ -147,3 +150,4 @@ app.get("/test", (req, res) => {
     process.exit(1);
   }
 })();
+
