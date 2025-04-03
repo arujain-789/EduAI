@@ -12,15 +12,15 @@ from google.cloud import vision
 import os
 
 # 🛠 Debugging
-print("📝 Received arguments:", sys.argv)
+print("Received arguments:", sys.argv)
 
 # 🔹 Check for GCS URL argument
 if len(sys.argv) < 2:
-    print("❌ Error: No GCS URL provided.")
+    print("Error: No GCS URL provided.")
     sys.exit(1)
 
 gcs_url = sys.argv[1]  # e.g., "https://storage.googleapis.com/your-bucket/file.pdf"
-print(f"📂 Processing GCS file: {gcs_url}")
+print(f"Processing GCS file: {gcs_url}")
 
 # 🔹 Download PDF from GCS
 def download_pdf(url):
@@ -34,24 +34,31 @@ def download_pdf(url):
 
 pdf_buffer = download_pdf(gcs_url)
 
-service_account_json = os.getenv("API_KEY")
+# 🔹 Load Google Cloud credentials from environment
+service_account_json = os.getenv("API_KEY")  # Ensure API_KEY contains the full JSON credentials
 
 if not service_account_json:
     print("❌ Error: API_KEY not found in environment variables")
-
-    
     exit(1)
 
+try:
+    # ✅ Ensure JSON is valid before writing
+    json.loads(service_account_json)
 
+    # ✅ Define credential path and write to a temp file
     cred_path = "/tmp/service-account.json"
-with open(cred_path, "w") as f:
-    f.write(service_account_json)
+    with open(cred_path, "w") as f:
+        f.write(service_account_json)
 
-
+    # ✅ Set credentials for Google Vision
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
+
+except json.JSONDecodeError:
+    print("❌ Error: Invalid JSON in API_KEY")
+    exit(1)
+
 # 🔹 Initialize Google Vision OCR
 client = vision.ImageAnnotatorClient()
-  # Set in Render's environment
 
 # 🔹 Extract text using Google Vision OCR (for scanned PDFs)
 def google_vision_ocr(image_bytes):
@@ -59,7 +66,7 @@ def google_vision_ocr(image_bytes):
     response = client.text_detection(image=image)
     return response.text_annotations[0].description if response.text_annotations else "❌ No text found."
 
-# 🔹 AI Grading Prompt (Unchanged)
+# 🔹 AI Grading Prompt
 FIXED_PROMPT = """
 You are a teacher grading an assignment. 
 1. Provide feedback on student improvement.
@@ -92,7 +99,14 @@ if extracted_text.strip():
     docs = db.similarity_search(FIXED_PROMPT)
     context = "\n".join([doc.page_content for doc in docs])
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=API_KEY)
+    # ✅ Get Gemini API key separately
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Store Gemini API key separately
+
+    if not GEMINI_API_KEY:
+        print("❌ Error: GEMINI_API_KEY not found in environment variables")
+        exit(1)
+
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=GEMINI_API_KEY)
     result = llm.invoke(f"Context: {context}\nPrompt: {FIXED_PROMPT}")
 
     # Extract marks and feedback
