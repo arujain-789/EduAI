@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PDF Grader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+        #upload-form {
+            margin-bottom: 20px;
+        }
+        #output {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI PDF Grader</h1>
+    <form id="upload-form">
+        <input type="file" id="pdfFile" accept="application/pdf" required>
+        <button type="submit">Upload & Process</button>
+    </form>
+    <button id="start-server">Start Server</button>
+    <div id="output"></div>
+
+    <script>
+        document.getElementById("upload-form").addEventListener("submit", async function(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById("pdfFile");
+            if (!fileInput.files.length) {
+                alert("Please select a PDF file.");
+                return;
+            }
+            const formData = new FormData();
+            formData.append("pdf", fileInput.files[0]);
+
+            const response = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json();
+            document.getElementById("output").innerHTML = result.message;
+        });
+
+        document.getElementById("start-server").addEventListener("click", async function() {
+            await fetch("/start-server", { method: "POST" });
+            alert("Server started!");
+        });
+    </script>
+</body>
+</html>

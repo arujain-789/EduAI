@@ -1,0 +1,19 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "dotenv": "^16.4.7",
+    "fs": "^0.0.1-security",
+    "pdf-parse": "^1.1.1",
+    "pdf2pic": "^3.1.4",
+    "pdfjs-dist": "^5.0.375",
+    "tesseract.js": "^6.0.0",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5",
+    "@google-cloud/storage": "^7.14.0"
+  },
+  "scripts": {
+    "start": "bash start.sh"
+  }
+}
