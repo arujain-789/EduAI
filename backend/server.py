@@ -26,8 +26,6 @@ from pdf2image import convert_from_path
 from google.cloud import vision
 from datetime import timedelta
 
-import requests
-
 # =====================
 # Configuration
 # =====================
@@ -247,7 +245,7 @@ class PDFProcessor:
             # Convert PDF to images (with page limit)
             images = convert_from_path(
                 pdf_path,
-                first_page=0,
+                first_page=1,
                 last_page=self.config.MAX_PAGES-1,
                 thread_count=4
             )
@@ -413,7 +411,14 @@ def main():
         logger.info(f"Starting processing for: {input_path_or_url}")
         
         with PDFProcessor() as processor:
-            if input_path_or_url.startswith("http://") or input_path_or_url.startswith("https://"):
+            if input_path_or_url.startswith("gs://"):
+                signed_url = gcs_uri_to_signed_url(input_path_or_url)
+                pdf_bytes = processor.download_pdf(signed_url)
+                with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(pdf_bytes)
+                    pdf_path = tmp.name
+                    processor.temp_files.append(pdf_path)
+            elif input_path_or_url.startswith("http://") or input_path_or_url.startswith("https://"):
                 pdf_bytes = processor.download_pdf(input_path_or_url)
                 with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_bytes)
@@ -422,8 +427,8 @@ def main():
             elif os.path.isfile(input_path_or_url):
                 pdf_path = input_path_or_url
             else:
-                raise ValueError("Invalid input: must be a local file or HTTPS URL")
-            
+                raise ValueError("Invalid input: must be a local file, GCS URI, or HTTPS URL")
+
             extracted_text = processor.extract_text(pdf_path)
             logger.info(f"Extracted {len(extracted_text)} characters")
             
@@ -441,6 +446,7 @@ def main():
                     f.write(output)
             print(output)
             return 0
+
             
     except PDFProcessingError as e:
         error_info = {
