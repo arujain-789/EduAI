@@ -9,7 +9,7 @@ from time import time
 from pathlib import Path
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from pdf2image import convert_from_path
 from google.cloud import vision
