@@ -12,27 +12,33 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// Define allowed origins at the top level
+// 1. First define allowedOrigins at the top level
 const allowedOrigins = [
   "https://www.eduai2025.app",
   "https://eduai2025.app",
   process.env.NODE_ENV === "development" && "http://localhost:3000"
 ].filter(Boolean);
 
-// CORS configuration using the defined allowedOrigins
+// 2. Then use it in CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    
+    const msg = `CORS blocked for origin: ${origin}`;
+    console.warn(msg);
+    return callback(new Error(msg));
   },
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
+// 3. Apply CORS middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -71,7 +77,7 @@ app.get('/test', (req, res) => {
 function processPDF(filePath) {
   return new Promise((resolve, reject) => {
     const pythonProcess = exec(
-      `python3 server.py "${filePath}"`, 
+      `python3 grader.py "${filePath}"`, 
       { 
         maxBuffer: 1024 * 1024 * 5, // 5MB
         timeout: 30000 // 30 seconds
@@ -107,4 +113,5 @@ function processPDF(filePath) {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
 });
