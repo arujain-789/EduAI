@@ -12,24 +12,28 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// Enhanced CORS configuration
+// Define allowed origins at the top level
 const allowedOrigins = [
   "https://www.eduai2025.app",
   "https://eduai2025.app",
   process.env.NODE_ENV === "development" && "http://localhost:3000"
 ].filter(Boolean);
 
-app.use(cors({
-  origin: function(origin, callback) {
+// CORS configuration using the defined allowedOrigins
+const corsOptions = {
+  origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Process PDF endpoint
@@ -67,7 +71,7 @@ app.get('/test', (req, res) => {
 function processPDF(filePath) {
   return new Promise((resolve, reject) => {
     const pythonProcess = exec(
-      `python3 grader.py "${filePath}"`, 
+      `python3 server.py "${filePath}"`, 
       { 
         maxBuffer: 1024 * 1024 * 5, // 5MB
         timeout: 30000 // 30 seconds
