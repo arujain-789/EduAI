@@ -27,7 +27,7 @@ const config = {
 
 // Initialize Google Cloud Storage
 const storage = new Storage({
-  keyFilename: process.env.GCS_CREDENTIALS,
+  credentials: JSON.parse(process.env.GCS_CREDENTIALS_JSON),
   projectId: process.env.PROJECT_ID
 });
 const bucket = storage.bucket(config.gcsBucket);
