@@ -7,7 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const basicAuth = require('express-basic-auth');
+const { Storage } = require('@google-cloud/storage'); // GCS client
 
 const app = express();
 
@@ -15,14 +15,22 @@ const app = express();
 // Configuration
 // =====================
 const config = {
-  maxFileSize: 100 * 1024 * 1024, // 10MB
+  maxFileSize: 10 * 1024 * 1024, // 10MB
   pythonScript: path.join(__dirname, 'server.py'),
   uploadDir: path.join(__dirname, 'uploads'),
   allowedOrigins: [
     "https://www.eduai2025.app",
     "https://eduai2025.app"
-  ]
+  ],
+  gcsBucket: process.env.BUCKET_NAME || 'eduai2025storage' // GCS config
 };
+
+// Initialize Google Cloud Storage
+const storage = new Storage({
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  projectId: process.env.PROJECT_ID
+});
+const bucket = storage.bucket(config.gcsBucket);
 
 // =====================
 // Security Middlewares
@@ -41,48 +49,33 @@ const apiLimiter = rateLimit({
 app.use(apiLimiter);
 
 // =====================
-// Authentication
-// =====================
-app.use(basicAuth({
-  users: { [process.env.API_USER]: process.env.API_PASSWORD },
-  challenge: true,
-  unauthorizedResponse: 'Unauthorized access'
-}));
-
-// =====================
 // CORS Configuration
 // =====================
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || config.allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`Blocked CORS request from: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (config.allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    const originRegex = /^https?:\/\/(?:www\.)?eduai2025\.app(?:\.\w+)?$/;
+    if (originRegex.test(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`Blocked CORS request from: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'OPTIONS']
+  methods: ['GET', 'POST', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type'],
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // =====================
-// File Upload Setup
+// File Upload Setup (with GCS)
 // =====================
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (!fs.existsSync(config.uploadDir)) {
-      fs.mkdirSync(config.uploadDir, { recursive: true });
-    }
-    cb(null, config.uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(), // Store in memory for GCS upload
   limits: { fileSize: config.maxFileSize },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
@@ -94,15 +87,13 @@ const upload = multer({
 });
 
 // =====================
-// Routes
+// Routes (with GCS processing)
 // =====================
 app.get('/health', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://www.eduai2025.app');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.json({ 
     status: 'OK',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version
+    gcsBucket: config.gcsBucket // Verify GCS connection
   });
 });
 
@@ -112,16 +103,22 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const result = await processPDF(req.file.path);
+    // 1. Upload to GCS
+    const gcsFileName = `pdfs/${Date.now()}-${req.file.originalname}`;
+    const file = bucket.file(gcsFileName);
     
-    // Cleanup
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch (cleanupErr) {
-      console.error('Cleanup error:', cleanupErr);
-    }
+    await file.save(req.file.buffer, {
+      metadata: { contentType: req.file.mimetype },
+    });
 
-    res.json(result);
+    // 2. Process with Python (using GCS path)
+    const result = await processPDF(`gs://${config.gcsBucket}/${gcsFileName}`);
+    
+    res.json({
+      ...result,
+      gcsPath: gcsFileName // Return GCS reference
+    });
+
   } catch (error) {
     console.error('Upload error:', error.stack);
     res.status(500).json({ 
@@ -132,12 +129,16 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 });
 
 // =====================
-// Helper Functions
+// Helper Functions (GCS-aware)
 // =====================
 async function processPDF(filePath) {
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python3', [config.pythonScript, filePath], {
-      timeout: 60000 // 60 seconds timeout
+    const pythonProcess = spawn('python3', [
+      config.pythonScript, 
+      filePath,
+      `--gcs-bucket=${config.gcsBucket}` // Pass GCS info to Python
+    ], {
+      timeout: 60000
     });
 
     let stdout = '';
@@ -160,38 +161,13 @@ async function processPDF(filePath) {
       }
 
       try {
-        const result = JSON.parse(stdout);
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        resolve(result);
+        resolve(JSON.parse(stdout));
       } catch (parseError) {
-        console.error('Parse Error:', parseError);
-        reject(new Error('Invalid response format from processor'));
+        reject(new Error('Invalid response format'));
       }
-    });
-
-    pythonProcess.on('error', (err) => {
-      console.error('Process Error:', err);
-      reject(err);
     });
   });
 }
-
-// =====================
-// Error Handling
-// =====================
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: err.message });
-  }
-  
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { details: err.message })
-  });
-});
 
 // =====================
 // Server Startup
@@ -199,9 +175,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
-
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+  console.log(`GCS Bucket: ${config.gcsBucket}`);
+  console.log(`WARNING: Running without authentication`);
 });
