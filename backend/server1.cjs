@@ -7,136 +7,83 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const basicAuth = require('express-basic-auth');
 
 const app = express();
-def process_with_ai(text):
-    try:
-        logger.info("Starting AI processing")
-        
-        # Initialize with error handling
-        try:
-            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-            logger.info("Embeddings model loaded")
-        except Exception as e:
-            logger.error(f"Embeddings failed: {str(e)}")
-            raise
 
-        try:
-            db = FAISS.from_texts([text], embeddings)
-            logger.info(f"Created vector store with text length: {len(text)}")
-        except Exception as e:
-            logger.error(f"Vector store failed: {str(e)}")
-            raise
+// =====================
+// Configuration
+// =====================
+const config = {
+  maxFileSize: 10 * 1024 * 1024, // 10MB
+  pythonScript: path.join(__dirname, 'pdf_processor.py'),
+  uploadDir: path.join(__dirname, 'uploads'),
+  allowedOrigins: [
+    "https://www.eduai2025.app",
+    "https://eduai2025.app"
+  ]
+};
 
-        try:
-            docs = db.similarity_search(FIXED_PROMPT, k=3)
-            logger.info(f"Found {len(docs)} relevant documents")
-        except Exception as e:
-            logger.error(f"Similarity search failed: {str(e)}")
-            raise
-
-        try:
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-pro-latest",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=0.3
-            )
-            logger.info("LLM initialized")
-        except Exception as e:
-            logger.error(f"LLM init failed: {str(e)}")
-            raise
-
-        try:
-            context = "\n".join([doc.page_content for doc in docs])
-            result = llm.invoke(f"Context: {context}\nPrompt: {FIXED_PROMPT}")
-            logger.info("AI invocation successful")
-            
-            # Parse and validate response
-            ai_response = result.content
-            if not ai_response:
-                raise ValueError("Empty response from AI")
-                
-            marks_match = re.search(r"Marks:\s*(\d{1,3})/100", ai_response, re.IGNORECASE)
-            marks = marks_match.group(1) if marks_match else None
-            
-            if not marks or not marks.isdigit():
-                raise ValueError("Invalid marks format in response")
-                
-            return {
-                "marks": f"{marks}/100",
-                "feedback": re.sub(r"Marks:\s*\d{1,3}/100", "", ai_response).strip(),
-                "raw_response": ai_response  # For debugging
-            }
-            
-        except Exception as e:
-            logger.error(f"AI processing failed: {str(e)}")
-            raise
-
-    except Exception as e:
-        logger.error(f"AI pipeline failed: {traceback.format_exc()}")
-        raise Exception(f"AI processing error: {str(e)}")
 // =====================
 // Security Middlewares
 // =====================
 app.use(helmet());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: config.maxFileSize }));
 
 // =====================
 // Rate Limiting
 // =====================
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP
-  standardHeaders: true,
-  legacyHeaders: false,
+  max: 100,
   message: 'Too many requests, please try again later'
 });
-
 app.use(apiLimiter);
+
+// =====================
+// Authentication
+// =====================
+app.use(basicAuth({
+  users: { [process.env.API_USER]: process.env.API_PASSWORD },
+  challenge: true,
+  unauthorizedResponse: 'Unauthorized access'
+}));
 
 // =====================
 // CORS Configuration
 // =====================
-const allowedOrigins = [
-  "https://www.eduai2025.app",
-  "https://eduai2025.app"
-];
-
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow no-origin requests
-    
-    // Case-insensitive comparison
-    const originLower = origin.toLowerCase();
-    const isAllowed = allowedOrigins.some(
-      allowed => originLower === allowed.toLowerCase()
-    );
-
-    if (isAllowed) {
-      return callback(null, true);
+    if (!origin || config.allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     }
-
-    console.warn(`Blocked CORS request from: ${origin}`);
-    callback(new Error(`Origin '${origin}' not allowed`));
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
+  methods: ['GET', 'POST', 'OPTIONS']
 };
-
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // =====================
 // File Upload Setup
 // =====================
-const upload = multer({
-  dest: 'uploads/',
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-    files: 1
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(config.uploadDir)) {
+      fs.mkdirSync(config.uploadDir, { recursive: true });
+    }
+    cb(null, config.uploadDir);
   },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: config.maxFileSize },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -152,7 +99,8 @@ const upload = multer({
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version
   });
 });
 
@@ -162,30 +110,21 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Secure file path handling
-    const uploadDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const safePath = path.join(uploadDir, req.file.filename);
-    
-    // Process PDF
-    const result = await processPDF(safePath);
+    const result = await processPDF(req.file.path);
     
     // Cleanup
     try {
-      fs.unlinkSync(safePath);
+      fs.unlinkSync(req.file.path);
     } catch (cleanupErr) {
       console.error('Cleanup error:', cleanupErr);
     }
 
     res.json(result);
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Upload error:', error.stack);
     res.status(500).json({ 
       error: 'Processing failed',
-      details: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -193,14 +132,10 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 // =====================
 // Helper Functions
 // =====================
-function processPDF(filePath) {
+async function processPDF(filePath) {
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python3', [
-      path.join(__dirname, 'server.py'),
-      filePath
-    ], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 30000 // 30 seconds
+    const pythonProcess = spawn('python3', [config.pythonScript, filePath], {
+      timeout: 60000 // 60 seconds timeout
     });
 
     let stdout = '';
@@ -212,21 +147,30 @@ function processPDF(filePath) {
 
     pythonProcess.stderr.on('data', (data) => {
       stderr += data.toString();
+      console.error('Python Error:', data.toString());
     });
 
     pythonProcess.on('close', (code) => {
-      if (code !== 0 || stderr) {
-        return reject(new Error(stderr || 'Processing failed'));
+      if (code !== 0) {
+        const error = new Error(stderr || 'Python process failed');
+        error.code = code;
+        return reject(error);
       }
-      
+
       try {
-        resolve(JSON.parse(stdout));
+        const result = JSON.parse(stdout);
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        resolve(result);
       } catch (parseError) {
-        reject(new Error('Invalid response format'));
+        console.error('Parse Error:', parseError);
+        reject(new Error('Invalid response format from processor'));
       }
     });
 
     pythonProcess.on('error', (err) => {
+      console.error('Process Error:', err);
       reject(err);
     });
   });
@@ -239,11 +183,12 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: err.message });
   }
-  if (err.message.includes('CORS')) {
-    return res.status(403).json({ error: err.message });
-  }
+  
   console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ 
+    error: 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { details: err.message })
+  });
 });
 
 // =====================
@@ -252,14 +197,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// Handle process events
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
 });
