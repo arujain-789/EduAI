@@ -59,27 +59,15 @@ logger = logging.getLogger(__name__)
 
 from google.oauth2 import service_account
 
-def gcs_uri_to_signed_url(gcs_uri, expiration_minutes=10):
-    if not gcs_uri.startswith("gs://"):
-        raise ValueError("Invalid GCS URI")
 
-    match = re.match(r"gs://([^/]+)/(.+)", gcs_uri)
-    if not match:
-        raise ValueError("Malformed GCS URI")
+def download_pdf_gcs(bucket_name, blob_name):
+    creds_dict = json.loads(os.environ['GCS_CREDENTIALS'])
+    credentials = service_account.Credentials.from_service_account_info(creds_dict)
 
-    bucket_name, blob_path = match.groups()
-
-    key_data = json.loads(os.environ["GCS_CREDENTIALS"])
-    credentials = service_account.Credentials.from_service_account_info(key_data)
     client = storage.Client(credentials=credentials)
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-
-    return blob.generate_signed_url(
-        version="v4",
-        expiration=timedelta(minutes=expiration_minutes),
-        method="GET",
-        content_type="application/pdf")
+    blob = bucket.blob(blob_name)
+    return blob.download_as_bytes()
 # =====================
 # Custom Exceptions
 # =====================
@@ -406,20 +394,28 @@ def main():
         
         with PDFProcessor() as processor:
             if input_path_or_url.startswith("gs://"):
-                signed_url = gcs_uri_to_signed_url(input_path_or_url)
-                pdf_bytes = processor.download_pdf(signed_url)
+                match = re.match(r"gs://([^/]+)/(.+)", input_path_or_url)
+                if not match:
+                    raise ValueError("Malformed GCS URI")
+
+                bucket_name, blob_name = match.groups()
+                pdf_bytes = download_pdf_gcs(bucket_name, blob_name)
+
                 with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_bytes)
                     pdf_path = tmp.name
                     processor.temp_files.append(pdf_path)
+
             elif input_path_or_url.startswith("http://") or input_path_or_url.startswith("https://"):
                 pdf_bytes = processor.download_pdf(input_path_or_url)
                 with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_bytes)
                     pdf_path = tmp.name
                     processor.temp_files.append(pdf_path)
+
             elif os.path.isfile(input_path_or_url):
                 pdf_path = input_path_or_url
+
             else:
                 raise ValueError("Invalid input: must be a local file, GCS URI, or HTTPS URL")
 
@@ -441,7 +437,6 @@ def main():
             print(output)
             return 0
 
-            
     except PDFProcessingError as e:
         error_info = {
             "error": e.message,
@@ -452,6 +447,7 @@ def main():
         logger.error(json.dumps(error_info, indent=2))
         print(json.dumps({"error": e.message}))
         return 1
+
     except Exception as e:
         error_info = {
             "error": str(e),
@@ -462,6 +458,7 @@ def main():
         logger.critical(json.dumps(error_info, indent=2))
         print(json.dumps({"error": "Unexpected processing error"}))
         return 2
+
 
 if __name__ == "__main__":
     sys.exit(main())
