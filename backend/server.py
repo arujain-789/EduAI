@@ -57,6 +57,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from google.oauth2 import service_account
+
 def gcs_uri_to_signed_url(gcs_uri, expiration_minutes=10):
     if not gcs_uri.startswith("gs://"):
         raise ValueError("Invalid GCS URI")
@@ -67,25 +69,17 @@ def gcs_uri_to_signed_url(gcs_uri, expiration_minutes=10):
 
     bucket_name, blob_path = match.groups()
 
-    client = storage.Client()
+    key_data = json.loads(os.environ["GCS_CREDENTIALS"])
+    credentials = service_account.Credentials.from_service_account_info(key_data)
+    client = storage.Client(credentials=credentials)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
 
-    url = blob.generate_signed_url(
+    return blob.generate_signed_url(
         version="v4",
         expiration=timedelta(minutes=expiration_minutes),
         method="GET",
-        content_type="application/pdf"
-    )
-    return url
-def download_pdf(signed_url, local_path="temp.pdf"):
-    response = requests.get(signed_url)
-    if response.status_code == 200:
-        with open(local_path, "wb") as f:
-            f.write(response.content)
-        return local_path
-    else:
-        raise Exception("Failed to download PDF")
+        content_type="application/pdf")
 # =====================
 # Custom Exceptions
 # =====================
