@@ -300,7 +300,10 @@ class PDFProcessor:
                     logger.warning(f"Truncated text to {self.config.MAX_TEXT_LENGTH} characters")
 
                 # Create embeddings and vector store
-                embeddings = self.get_embeddings()
+                logger.info("Calling get_embeddings()")
+embeddings = self.get_embeddings()
+logger.info("Embeddings object received")
+
                 db = FAISS.from_texts([processed_text], embeddings)
                 
                 # Find most relevant sections
@@ -373,7 +376,8 @@ Please provide:
                 "warnings": ["response_truncated"] if "..." in response_text else []
             }
         except Exception as e:
-            logger.error(f"Failed to parse AI response: {str(e)}")
+    logger.error("Failed to load embeddings:\n%s", traceback.format_exc())
+
             raise PDFProcessingError(
                 message="AI response parsing failed",
                 error_type="PARSE_ERROR",
