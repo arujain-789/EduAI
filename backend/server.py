@@ -35,25 +35,24 @@ FIXED_PROMPT = """You are a teacher grading an assignment.
 3. Focus on key strengths and areas for improvement
 4. Be professional yet encouraging"""
 
+
 class Config:
     MAX_TEXT_LENGTH = 15000  # Truncate longer texts to prevent API overload
-    PROCESS_TIMEOUT = 50     # Seconds for entire AI processing
-    OCR_TIMEOUT = 25         # Seconds per OCR page
-    MIN_TEXT_LENGTH = 100    # Minimum viable text characters
-    MAX_PAGES = 200          # Maximum pages to process
+    PROCESS_TIMEOUT = 50  # Seconds for entire AI processing
+    OCR_TIMEOUT = 25  # Seconds per OCR page
+    MIN_TEXT_LENGTH = 100  # Minimum viable text characters
+    MAX_PAGES = 200  # Maximum pages to process
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
     GEMINI_MODEL = "gemini-pro"
+
 
 # =====================
 # Logging Setup
 # =====================
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('pdf_processor.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("pdf_processor.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -61,27 +60,33 @@ from google.oauth2 import service_account
 
 
 def download_pdf_gcs(bucket_name, blob_name):
-    creds_dict = json.loads(os.environ['GCS_CREDENTIALS'])
+    creds_dict = json.loads(os.environ["GCS_CREDENTIALS"])
     credentials = service_account.Credentials.from_service_account_info(creds_dict)
 
     client = storage.Client(credentials=credentials)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
+
+
 # =====================
 # Custom Exceptions
 # =====================
 class PDFProcessingError(Exception):
     """Custom exception for processing failures"""
+
     def __init__(self, message, error_type, details=None):
         self.message = message
         self.error_type = error_type
         self.details = details
         super().__init__(message)
 
+
 class TimeoutException(Exception):
     """Exception for process timeouts"""
+
     pass
+
 
 # =====================
 # Timeout Handler
@@ -89,12 +94,13 @@ class TimeoutException(Exception):
 def timeout_handler(signum, frame):
     raise TimeoutException("Processing timed out")
 
+
 # =====================
 # Main Processor Class
 # =====================
 class PDFProcessor:
     _embedding_model = None
-    
+
     def __init__(self):
         self.start_time = time()
         self.temp_files = []
@@ -111,7 +117,7 @@ class PDFProcessor:
         """Verify required environment variables"""
         if not os.getenv("GEMINI_API_KEY"):
             raise EnvironmentError("GEMINI_API_KEY environment variable not set")
-        
+
         # Verify Google Cloud credentials if OCR might be used
         if not os.getenv("GCS_CREDENTIALS"):
             logger.warning("Google Cloud credentials not set - OCR may fail")
@@ -125,7 +131,7 @@ class PDFProcessor:
                     logger.debug(f"Cleaned up temp file: {filepath}")
             except Exception as e:
                 logger.error(f"Error cleaning up {filepath}: {str(e)}")
-        
+
         # Force garbage collection
         gc.collect()
         if torch.cuda.is_available():
@@ -138,8 +144,8 @@ class PDFProcessor:
             try:
                 cls._embedding_model = HuggingFaceEmbeddings(
                     model_name=Config.EMBEDDING_MODEL,
-                    model_kwargs={'device': 'cpu'},  # Force CPU to save memory
-                    encode_kwargs={'normalize_embeddings': True}
+                    model_kwargs={"device": "cpu"},  # Force CPU to save memory
+                    encode_kwargs={"normalize_embeddings": True},
                 )
                 logger.info("Embeddings model loaded successfully")
             except Exception as e:
@@ -147,18 +153,20 @@ class PDFProcessor:
                 raise PDFProcessingError(
                     message="Embeddings initialization failed",
                     error_type="MODEL_ERROR",
-                    details=str(e)
+                    details=str(e),
                 )
         return cls._embedding_model
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
     def download_pdf(self, url):
         """Download PDF from URL with safety checks"""
         try:
             logger.info(f"Downloading PDF from {url}")
-            
+
             # Security checks
-            if not url.startswith(('http://', 'https://')):
+            if not url.startswith(("http://", "https://")):
                 raise ValueError("Invalid URL scheme")
             if len(url) > 512:
                 raise ValueError("URL too long")
@@ -167,25 +175,25 @@ class PDFProcessor:
                 url,
                 timeout=10,
                 headers={
-                    'User-Agent': 'EduAI-PDF-Processor/1.0',
-                    'Accept': 'application/pdf'
-                }
+                    "User-Agent": "EduAI-PDF-Processor/1.0",
+                    "Accept": "application/pdf",
+                },
             )
             response.raise_for_status()
-            
-            content_type = response.headers.get('Content-Type', '')
-            if 'application/pdf' not in content_type:
+
+            content_type = response.headers.get("Content-Type", "")
+            if "application/pdf" not in content_type:
                 raise ValueError(f"Unexpected content type: {content_type}")
-                
+
             if len(response.content) > self.config.MAX_TEXT_LENGTH:
                 raise ValueError("PDF file too large")
-                
+
             return response.content
         except requests.exceptions.RequestException as e:
             raise PDFProcessingError(
                 message="PDF download failed",
                 error_type="NETWORK_ERROR",
-                details=str(e)
+                details=str(e),
             )
 
     def extract_text(self, pdf_path):
@@ -203,9 +211,9 @@ class PDFProcessor:
                 loader = PyPDFLoader(pdf_path)
                 pages = loader.load_and_split()
                 text = "\n".join([page.page_content for page in pages])
-                
+
                 if len(text.strip()) >= self.config.MIN_TEXT_LENGTH:
-                    return text[:self.config.MAX_TEXT_LENGTH]
+                    return text[: self.config.MAX_TEXT_LENGTH]
             except Exception as e:
                 logger.warning(f"PyPDF extraction warning: {str(e)}")
 
@@ -217,24 +225,25 @@ class PDFProcessor:
             raise PDFProcessingError(
                 message="Text extraction failed",
                 error_type="EXTRACTION_ERROR",
-                details=str(e))
-    
+                details=str(e),
+            )
+
     def extract_text_with_ocr(self, pdf_path):
         """Perform OCR using Google Vision with parallel processing"""
         try:
             logger.info("Initializing OCR processing")
-            
+
             # Convert PDF to images (with page limit)
             images = convert_from_path(
                 pdf_path,
                 first_page=1,
-                last_page=self.config.MAX_PAGES-1,
-                thread_count=4
+                last_page=self.config.MAX_PAGES - 1,
+                thread_count=4,
             )
-            
+
             if not images:
                 raise ValueError("No pages converted for OCR")
-                
+
             logger.info(f"Processing {len(images)} pages with OCR")
 
             # Initialize Google Vision client
@@ -245,17 +254,21 @@ class PDFProcessor:
                 """Process single image with timeout protection"""
                 try:
                     with io.BytesIO() as img_buffer:
-                        img.save(img_buffer, format='JPEG', quality=85)
+                        img.save(img_buffer, format="JPEG", quality=85)
                         content = img_buffer.getvalue()
-                        
+
                         # Set timeout for this image
                         signal.signal(signal.SIGALRM, timeout_handler)
                         signal.alarm(self.config.OCR_TIMEOUT)
-                        
+
                         try:
                             image = vision.Image(content=content)
                             response = client.text_detection(image=image)
-                            return response.text_annotations[0].description if response.text_annotations else ""
+                            return (
+                                response.text_annotations[0].description
+                                if response.text_annotations
+                                else ""
+                            )
                         finally:
                             signal.alarm(0)
                 except Exception as e:
@@ -265,72 +278,62 @@ class PDFProcessor:
             # Process images in parallel
             with ThreadPoolExecutor(max_workers=4) as executor:
                 results = list(executor.map(process_image, images))
-            
+
             full_text = "\n".join(filter(None, results))
-            
+
             if len(full_text.strip()) < self.config.MIN_TEXT_LENGTH:
                 raise ValueError("Insufficient text extracted via OCR")
-                
-            return full_text[:self.config.MAX_TEXT_LENGTH]
+
+            return full_text[: self.config.MAX_TEXT_LENGTH]
         except Exception as e:
             logger.error(f"OCR processing failed: {str(e)}")
             raise PDFProcessingError(
-                message="OCR processing failed",
-                error_type="OCR_ERROR",
-                details=str(e))
+                message="OCR processing failed", error_type="OCR_ERROR", details=str(e)
+            )
 
-    def process_with_ai(self, text):
-        """Generate feedback using Gemini AI with comprehensive error handling"""
+def process_with_ai(self, text):
+    """Generate feedback using Gemini AI with comprehensive error handling"""
+    try:  # ✅ Indented correctly
+        logger.info("Starting AI processing pipeline")
+
+        # Set overall timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(self.config.PROCESS_TIMEOUT)
+
         try:
-            logger.info("Starting AI processing pipeline")
+            # Validate input
+            if not text or len(text.strip()) < self.config.MIN_TEXT_LENGTH:
+                raise ValueError("Insufficient text for processing")
             
-            # Set overall timeout
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(self.config.PROCESS_TIMEOUT)
-            
-            try:
-                # Validate input
-                if not text or len(text.strip()) < self.config.MIN_TEXT_LENGTH:
-                    raise ValueError("Insufficient text for processing")
-                
-                # Prepare text (clean and truncate if needed)
-                processed_text = text.strip()
-                if len(processed_text) > self.config.MAX_TEXT_LENGTH:
-                    processed_text = processed_text[:self.config.MAX_TEXT_LENGTH]
-                    logger.warning(f"Truncated text to {self.config.MAX_TEXT_LENGTH} characters")
+            # Prepare text (clean and truncate if needed)
+            processed_text = text.strip()
+            if len(processed_text) > self.config.MAX_TEXT_LENGTH:
+                processed_text = processed_text[:self.config.MAX_TEXT_LENGTH]
+                logger.warning(f"Truncated text to {self.config.MAX_TEXT_LENGTH} characters")
 
-                # Create embeddings and vector store
-                try:
-    logger.info("Starting AI processing pipeline")
+            # Create embeddings and vector store
+            logger.info("Calling get_embeddings()")
+            embeddings = self.get_embeddings()
+            logger.info("Embeddings object received")
 
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(self.config.PROCESS_TIMEOUT)
+            db = FAISS.from_texts([processed_text], embeddings)
 
-    try:
-        ...
-        logger.info("Calling get_embeddings()")
-        embeddings = self.get_embeddings()
-        logger.info("Embeddings object received")
+            # Find most relevant sections
+            docs = db.similarity_search(FIXED_PROMPT, k=3)
+            context = "\n".join([doc.page_content for doc in docs])
 
-                db = FAISS.from_texts([processed_text], embeddings)
-                
-                # Find most relevant sections
-                docs = db.similarity_search(FIXED_PROMPT, k=3)
-                context = "\n".join([doc.page_content for doc in docs])
-                
-                # Initialize Gemini with safety settings
-                llm = ChatGoogleGenerativeAI(
-                    model=self.config.GEMINI_MODEL,
-                    api_key=os.getenv("GEMINI_API_KEY"),
-                    temperature=0.3,
-                    safety_settings={
-                        "HARM_CATEGORY_DANGEROUS": "BLOCK_ONLY_HIGH",
-                        "HARM_CATEGORY_HARASSMENT": "BLOCK_ONLY_HIGH"
-                    }
-                )
-                
-                # Generate response
-                prompt = f"""Context from student work:
+            # Initialize Gemini
+            llm = ChatGoogleGenerativeAI(
+                model=self.config.GEMINI_MODEL,
+                api_key=os.getenv("GEMINI_API_KEY"),
+                temperature=0.3,
+                safety_settings={
+                    "HARM_CATEGORY_DANGEROUS": "BLOCK_ONLY_HIGH",
+                    "HARM_CATEGORY_HARASSMENT": "BLOCK_ONLY_HIGH"
+                }
+            )
+
+            prompt = f"""Context from student work:
 {context}
 
 Instruction for grader:
@@ -340,56 +343,22 @@ Please provide:
 1. Detailed feedback
 2. Numerical grade (Marks: XX/100)
 3. Key recommendations"""
-                
-                result = llm.invoke(prompt)
-                
-                # Parse and validate response
-                return self._parse_ai_response(result.content)
-            finally:
-                signal.alarm(0)
-        except Exception as e:
-            logger.error(f"AI processing failed: {traceback.format_exc()}")
-            raise PDFProcessingError(
-                message="AI processing failed",
-                error_type="AI_ERROR",
-                details=str(e))
 
-    def _parse_ai_response(self, response_text):
-        """Validate and parse the AI response with strict checks"""
-        try:
-            # Extract marks
-            marks_match = re.search(r"Marks:\s*(\d{1,3})/100", response_text, re.IGNORECASE)
-            if not marks_match:
-                raise ValueError("Marks not found in expected format")
-                
-            marks = marks_match.group(1)
-            if not marks.isdigit() or not (0 <= int(marks) <= 100):
-                raise ValueError(f"Invalid marks value: {marks}")
-            
-            # Extract feedback (remove marks line)
-            feedback = re.sub(
-                r"Marks:\s*\d{1,3}/100\s*", 
-                "", 
-                response_text, 
-                flags=re.IGNORECASE
-            ).strip()
-            
-            if not feedback or len(feedback) < 20:
-                raise ValueError("Insufficient feedback content")
-            
-            return {
-                "marks": f"{marks}/100",
-                "feedback": feedback,
-                "processing_time": round(time() - self.start_time, 2),
-                "warnings": ["response_truncated"] if "..." in response_text else []
-            }
-        except Exception as e:
-    logger.error("Failed to load embeddings:\n%s", traceback.format_exc())
+            result = llm.invoke(prompt)
 
-            raise PDFProcessingError(
-                message="AI response parsing failed",
-                error_type="PARSE_ERROR",
-                details=str(e))
+            return self._parse_ai_response(result.content)  # ✅ Now properly inside function
+
+        finally:
+            signal.alarm(0)  # Always cancel timeout
+
+    except Exception as e:
+        logger.error(f"AI processing failed: {traceback.format_exc()}")
+        raise PDFProcessingError(
+            message="AI processing failed",
+            error_type="AI_ERROR",
+            details=str(e)
+        )
+
 
 # =====================
 # Main Execution
@@ -397,13 +366,15 @@ Please provide:
 def main():
     try:
         if len(sys.argv) < 2:
-            raise ValueError("Usage: python pdf_processor.py <pdf_path_or_url> [output_file]")
-        
+            raise ValueError(
+                "Usage: python pdf_processor.py <pdf_path_or_url> [output_file]"
+            )
+
         input_path_or_url = sys.argv[1]
         output_file = sys.argv[2] if len(sys.argv) > 2 else None
-        
+
         logger.info(f"Starting processing for: {input_path_or_url}")
-        
+
         with PDFProcessor() as processor:
             if input_path_or_url.startswith("gs://"):
                 match = re.match(r"gs://([^/]+)/(.+)", input_path_or_url)
@@ -418,7 +389,9 @@ def main():
                     pdf_path = tmp.name
                     processor.temp_files.append(pdf_path)
 
-            elif input_path_or_url.startswith("http://") or input_path_or_url.startswith("https://"):
+            elif input_path_or_url.startswith(
+                "http://"
+            ) or input_path_or_url.startswith("https://"):
                 pdf_bytes = processor.download_pdf(input_path_or_url)
                 with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                     tmp.write(pdf_bytes)
@@ -429,22 +402,24 @@ def main():
                 pdf_path = input_path_or_url
 
             else:
-                raise ValueError("Invalid input: must be a local file, GCS URI, or HTTPS URL")
+                raise ValueError(
+                    "Invalid input: must be a local file, GCS URI, or HTTPS URL"
+                )
 
             extracted_text = processor.extract_text(pdf_path)
             logger.info(f"Extracted {len(extracted_text)} characters")
-            
+
             if len(extracted_text.strip()) < processor.config.MIN_TEXT_LENGTH:
                 raise ValueError(
                     f"Insufficient text extracted (min {processor.config.MIN_TEXT_LENGTH} chars required)"
                 )
-            
+
             result = processor.process_with_ai(extracted_text)
             logger.info("Processing completed successfully")
-            
+
             output = json.dumps(result, indent=2)
             if output_file:
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     f.write(output)
             print(output)
             return 0
@@ -454,7 +429,7 @@ def main():
             "error": e.message,
             "type": e.error_type,
             "details": e.details,
-            "timestamp": time()
+            "timestamp": time(),
         }
         logger.error(json.dumps(error_info, indent=2))
         print(json.dumps({"error": e.message}))
@@ -465,7 +440,7 @@ def main():
             "error": str(e),
             "type": type(e).__name__,
             "traceback": traceback.format_exc(),
-            "timestamp": time()
+            "timestamp": time(),
         }
         logger.critical(json.dumps(error_info, indent=2))
         print(json.dumps({"error": "Unexpected processing error"}))
@@ -474,4 +449,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
