@@ -13,6 +13,7 @@ import signal
 import gc
 import torch
 from tenacity import retry, stop_after_attempt, wait_exponential
+from google.cloud import storage
 
 # Third-party imports
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -99,7 +100,7 @@ class PDFProcessor:
             raise EnvironmentError("GEMINI_API_KEY environment variable not set")
         
         # Verify Google Cloud credentials if OCR might be used
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not os.getenv("GCS_CREDENTIALS"):
             logger.warning("Google Cloud credentials not set - OCR may fail")
 
     def cleanup(self):
