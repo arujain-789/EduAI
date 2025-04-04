@@ -15,8 +15,8 @@ const app = express();
 // Configuration
 // =====================
 const config = {
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  pythonScript: path.join(__dirname, 'pdf_processor.py'),
+  maxFileSize: 100 * 1024 * 1024, // 10MB
+  pythonScript: path.join(__dirname, 'server.py'),
   uploadDir: path.join(__dirname, 'uploads'),
   allowedOrigins: [
     "https://www.eduai2025.app",
