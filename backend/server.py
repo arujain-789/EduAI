@@ -300,9 +300,17 @@ class PDFProcessor:
                     logger.warning(f"Truncated text to {self.config.MAX_TEXT_LENGTH} characters")
 
                 # Create embeddings and vector store
-                logger.info("Calling get_embeddings()")
-embeddings = self.get_embeddings()
-logger.info("Embeddings object received")
+                try:
+    logger.info("Starting AI processing pipeline")
+
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(self.config.PROCESS_TIMEOUT)
+
+    try:
+        ...
+        logger.info("Calling get_embeddings()")
+        embeddings = self.get_embeddings()
+        logger.info("Embeddings object received")
 
                 db = FAISS.from_texts([processed_text], embeddings)
                 
