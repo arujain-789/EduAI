@@ -137,7 +137,7 @@ class PDFProcessor:
         if cls._embedding_model is None:
             try:
                 cls._embedding_model = HuggingFaceEmbeddings(
-                    model_name=cls.Config.EMBEDDING_MODEL,
+                    model_name=Config.EMBEDDING_MODEL,
                     model_kwargs={'device': 'cpu'},  # Force CPU to save memory
                     encode_kwargs={'normalize_embeddings': True}
                 )
