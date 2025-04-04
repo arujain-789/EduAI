@@ -24,6 +24,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from pdf2image import convert_from_path
 from google.cloud import vision
+from datetime import timedelta
+
 import requests
 
 # =====================
@@ -57,7 +59,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def gcs_uri_to_signed_url(gcs_uri, expiration_minutes=10):
+    if not gcs_uri.startswith("gs://"):
+        raise ValueError("Invalid GCS URI")
 
+    match = re.match(r"gs://([^/]+)/(.+)", gcs_uri)
+    if not match:
+        raise ValueError("Malformed GCS URI")
+
+    bucket_name, blob_path = match.groups()
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+
+    url = blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=expiration_minutes),
+        method="GET",
+        content_type="application/pdf"
+    )
+    return url
 def download_pdf(signed_url, local_path="temp.pdf"):
     response = requests.get(signed_url)
     if response.status_code == 200:
