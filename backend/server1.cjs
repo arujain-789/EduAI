@@ -97,6 +97,8 @@ const upload = multer({
 // Routes
 // =====================
 app.get('/health', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://www.eduai2025.app');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.json({ 
     status: 'OK',
     timestamp: new Date().toISOString(),
