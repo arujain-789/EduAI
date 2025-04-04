@@ -49,3 +49,6 @@ langchain-google-genai
 langchain_community
 langchain-huggingface
 sentence-transformers
+pypdf
+pdf2image
+huggingface-hub
