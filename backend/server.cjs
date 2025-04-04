@@ -1,92 +1,106 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
-const { exec } = require("child_process");
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const PORT = 3000;
+const upload = multer({ dest: 'uploads/' });
 
-app.use(cors());
+// Enhanced CORS configuration
+const allowedOrigins = [
+  "https://www.eduai2025.app",
+  "https://eduai2025.app",
+  process.env.NODE_ENV === "development" && "http://localhost:3000"
+].filter(Boolean);
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
-app.use(express.static("uploads"));
 
-
-// 🔹 Ensure "uploads" directory exists
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-console.log(`Uploads folder path: ${uploadDir}`);
-// 🔹 Multer Storage Config
-const storage = multer.diskStorage({
-    destination: uploadDir,
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + "-" + file.originalname);
-    }
-});
-const upload = multer({ storage });
-
-// 🔹 Upload PDF API
-app.post("/upload", upload.single("pdf"), (req, res) => {
+// Process PDF endpoint
+app.post('/upload', upload.single('pdf'), async (req, res) => {
+  try {
     if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded!" });
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log(`📂 Uploaded: ${req.file.filename}`);
-    const filePath = path.join(__dirname, "uploads", req.file.filename);
+    const filePath = path.join(__dirname, req.file.path);
+    console.log(`File uploaded: ${filePath}`);
+
+    const result = await processPDF(filePath);
     
-    exec(`python3 server1.py "${filePath}"`, (error, stdout, stderr) => {
+    // Cleanup uploaded file after processing
+    fs.unlink(filePath, (err) => {
+      if (err) console.error('Error deleting file:', err);
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Processing error:', error);
+    res.status(500).json({ 
+      error: 'AI processing failed',
+      details: error.message
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/test', (req, res) => {
+  res.json({ status: 'API working' });
+});
+
+function processPDF(filePath) {
+  return new Promise((resolve, reject) => {
+    const pythonProcess = exec(
+      `python3 grader.py "${filePath}"`, 
+      { 
+        maxBuffer: 1024 * 1024 * 5, // 5MB
+        timeout: 30000 // 30 seconds
+      },
+      (error, stdout, stderr) => {
         if (error) {
-            console.error(`❌ AI Processing Error: ${error.message}`);
-            return res.status(500).json({ error: "AI processing failed!" });
+          console.error(`❌ Execution Error: ${error.message}`);
+          return reject(new Error('AI processing failed'));
+        }
+        if (stderr) {
+          console.error(`❌ Python Error: ${stderr}`);
+          return reject(new Error(stderr));
         }
 
-        console.log(`🔹 AI Output: ${stdout}`);
-
-        // ✅ Response is now sent ONLY after AI processing is completed
-        res.json({ message: "File uploaded and AI processing completed!", filename: req.file.filename });
-    });
-});
-
-
-// 🔹 List Uploaded PDFs
-app.get("/list", (req, res) => {
-    fs.readdir(uploadDir, (err, files) => {
-        if (err) {
-            return res.status(500).json({ error: "Cannot list files." });
+        try {
+          const result = JSON.parse(stdout.trim());
+          resolve(result);
+        } catch (parseError) {
+          console.error('❌ JSON Parse Error:', parseError);
+          console.error('Raw Output:', stdout);
+          reject(new Error('Invalid AI response format'));
         }
-        res.json(files.filter(f => f.endsWith(".pdf"))); // Return only PDFs
+      }
+    );
+
+    pythonProcess.on('timeout', () => {
+      pythonProcess.kill();
+      reject(new Error('AI processing timed out'));
     });
+  });
+}
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-// 🔹 Fetch AI Output (Marks & Feedback)
-app.get("/ai-output", (req, res) => {
-    const outputFile = path.join(uploadDir, "output.json");
-
-    fs.readFile(outputFile, "utf8", (err, data) => {
-        if (err) {
-            return res.status(500).json({ error: "Error reading AI output" });
-        }
-
-        const output = JSON.parse(data);
-        res.json({ marks: output.marks, feedback: output.feedback });
-    });
-});
-
-// 🔹 Serve HTML File (Frontend)
-app.use(express.static("public")); // Ensure the frontend is served
-
-// 🔹 Delete a File
-app.delete("/delete/:filename", (req, res) => {
-    const filePath = path.join(uploadDir, req.params.filename);
-
-    fs.unlink(filePath, err => {
-        if (err) {
-            return res.status(500).json({ error: "File deletion failed." });
-        }
-        res.json({ message: "File deleted successfully." });
-    });
-});
-
-// 🔹 Start Server
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running at http://eduai2025.app:${PORT}`));
-
