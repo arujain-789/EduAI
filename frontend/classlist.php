@@ -115,7 +115,7 @@ $result = $stmt->get_result();
                     <td><?php echo htmlspecialchars($row['subject']); ?></td>
                     <td><?php echo htmlspecialchars($row['code']); ?></td>
                     <td><a href="specificclass.php?code=<?php echo urlencode($row['code']); ?>">Click Here</a></td>
-                    <td><a href="upload.html">Click Here</a></td>
+                    <td><a href="public/index.html">Click Here</a></td>
                 </tr>
             <?php endwhile; ?>
         </table>
