@@ -60,7 +60,7 @@ app.options('*', cors(corsOptions)); // Preflight requests
 const upload = multer({
   dest: 'uploads/',
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 20 * 1024 * 1024, // 10MB
     files: 1
   },
   fileFilter: (req, file, cb) => {
