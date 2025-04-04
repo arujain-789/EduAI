@@ -1,164 +1,117 @@
-const express = require("express");
-const multer = require("multer");
-const { Storage } = require("@google-cloud/storage");
-const cors = require("cors");
-const { v4: uuidv4 } = require("uuid");
-const { spawn } = require("child_process");
-require("dotenv").config(); // Load environment variables from .env
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const upload = multer({ dest: 'uploads/' });
 
-// ✅ Parse Google Cloud credentials
-let credentials;
-try {
-  credentials = JSON.parse(process.env.GCS_CREDENTIALS);
-} catch (error) {
-  console.error("❌ Error parsing Google Cloud credentials:", error.message);
-  process.exit(1);
-}
+// 1. First define allowedOrigins at the top level
+const allowedOrigins = [
+  "https://www.eduai2025.app",
+  "https://eduai2025.app",
+  process.env.NODE_ENV === "development" && "http://localhost:3000"
+].filter(Boolean);
 
-// ✅ Google Cloud Storage Configuration
-const storage = new Storage({ credentials });
-const bucketName = process.env.BUCKET_NAME || "your-bucket-name";
-const bucket = storage.bucket(bucketName);
-const pythonScriptPath = process.env.PYTHON_SCRIPT_PATH || "./server.py";
-
-// ✅ CORS Configuration
+// 2. Then use it in CORS configuration
 const corsOptions = {
-  origin: ["https://www.eduai2025.app", "https://eduai2025.app"],
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept"],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    const msg = `CORS blocked for origin: ${origin}`;
+    console.warn(msg);
+    return callback(new Error(msg));
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
+// 3. Apply CORS middleware
 app.use(cors(corsOptions));
-
-// ✅ Middleware
 app.use(express.json());
 
-// ✅ Explicitly Set CORS Headers (Preflight Handling)
- // Only set the allowed origin if it's in our whitelist
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Vary", "Origin"); // Important for caching
-  
-  // Cache preflight response for 2 hours (Chromium default)
-  if (req.method === "OPTIONS") {
-    res.header("Access-Control-Max-Age", "7200");
-    return res.sendStatus(204);
-  }
-  
-  next();
-;
-
-// ✅ Multer Storage Configuration (for memory storage)
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-});
-
-// ✅ Upload Route
-app.post("/upload", upload.single("pdf"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "❌ No file uploaded!" });
-
+// Process PDF endpoint
+app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
-    const fileName = `uploads/${uuidv4()}-${req.file.originalname}`;
-    const file = bucket.file(fileName);
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
 
-    // Upload to GCS
-    await file.save(req.file.buffer, {
-      metadata: { contentType: req.file.mimetype },
-    });
+    const filePath = path.join(__dirname, req.file.path);
+    console.log(`File uploaded: ${filePath}`);
 
-    // Generate signed URL
-    const [signedUrl] = await file.getSignedUrl({
-      action: "read",
-      expires: Date.now() + 3600000, // 1 hour
-    });
-
-    console.log(`✅ File uploaded: ${fileName}`);
-
-    // Call Python script for grading
-    const pythonProcess = spawn("python3", [pythonScriptPath, signedUrl]);
+    const result = await processPDF(filePath);
     
-    let aiResponse = "";
-    let aiError = "";
-
-    pythonProcess.stdout.on("data", (data) => {
-      aiResponse += data.toString();
+    // Cleanup uploaded file after processing
+    fs.unlink(filePath, (err) => {
+      if (err) console.error('Error deleting file:', err);
     });
 
-    pythonProcess.stderr.on("data", (data) => {
-      aiError += data.toString();
+    res.json(result);
+  } catch (error) {
+    console.error('Processing error:', error);
+    res.status(500).json({ 
+      error: 'AI processing failed',
+      details: error.message
     });
+  }
+});
 
-    pythonProcess.on("close", (code) => {
-      if (aiError) {
-        console.error("❌ AI Error:", aiError);
-        return res.status(500).json({ error: "AI processing failed", details: aiError });
+// Health check endpoint
+app.get('/test', (req, res) => {
+  res.json({ status: 'API working' });
+});
+
+function processPDF(filePath) {
+  return new Promise((resolve, reject) => {
+    const pythonProcess = exec(
+      `python3 grader.py "${filePath}"`, 
+      { 
+        maxBuffer: 1024 * 1024 * 5, // 5MB
+        timeout: 30000 // 30 seconds
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error(`❌ Execution Error: ${error.message}`);
+          return reject(new Error('AI processing failed'));
+        }
+        if (stderr) {
+          console.error(`❌ Python Error: ${stderr}`);
+          return reject(new Error(stderr));
+        }
+
+        try {
+          const result = JSON.parse(stdout.trim());
+          resolve(result);
+        } catch (parseError) {
+          console.error('❌ JSON Parse Error:', parseError);
+          console.error('Raw Output:', stdout);
+          reject(new Error('Invalid AI response format'));
+        }
       }
+    );
 
-      try {
-        const parsedResponse = JSON.parse(aiResponse);
-        return res.json({
-          message: "✅ Success!",
-          url: signedUrl,
-          filename: fileName,
-          marks: parsedResponse.marks,
-          feedback: parsedResponse.feedback,
-        });
-      } catch (err) {
-        console.error("❌ AI Response Error:", err);
-        return res.status(500).json({ error: "Invalid AI response" });
-      }
+    pythonProcess.on('timeout', () => {
+      pythonProcess.kill();
+      reject(new Error('AI processing timed out'));
     });
+  });
+}
 
-  } catch (err) {
-    console.error("❌ Upload Error:", err);
-    return res.status(500).json({ error: "Upload failed" });
-  }
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
 });
-
-// ✅ List Uploaded Files
-app.get("/list", async (req, res) => {
-  try {
-    const [files] = await bucket.getFiles({ prefix: "uploads/" });
-    res.json(files.map(file => file.name.split("/").pop()));
-  } catch (err) {
-    console.error("❌ Error fetching file list:", err);
-    res.status(500).json({ error: "Failed to fetch files" });
-  }
-});
-
-// ✅ Test Route
-app.get("/test", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "https://www.eduai2025.app");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-
-  res.json({ status: "Backend connected", timestamp: new Date() });
-});
-
-// ✅ Start Server
-(async () => {
-  try {
-    const [exists] = await bucket.exists();
-    if (!exists) throw new Error(`❌ Bucket ${bucketName} not found!`);
-
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-  } catch (err) {
-    console.error("❌ GCS Error:", err.message);
-    process.exit(1);
-  }
-})();
-
