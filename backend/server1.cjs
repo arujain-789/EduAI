@@ -9,7 +9,72 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const app = express();
+def process_with_ai(text):
+    try:
+        logger.info("Starting AI processing")
+        
+        # Initialize with error handling
+        try:
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            logger.info("Embeddings model loaded")
+        except Exception as e:
+            logger.error(f"Embeddings failed: {str(e)}")
+            raise
 
+        try:
+            db = FAISS.from_texts([text], embeddings)
+            logger.info(f"Created vector store with text length: {len(text)}")
+        except Exception as e:
+            logger.error(f"Vector store failed: {str(e)}")
+            raise
+
+        try:
+            docs = db.similarity_search(FIXED_PROMPT, k=3)
+            logger.info(f"Found {len(docs)} relevant documents")
+        except Exception as e:
+            logger.error(f"Similarity search failed: {str(e)}")
+            raise
+
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.5-pro-latest",
+                api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=0.3
+            )
+            logger.info("LLM initialized")
+        except Exception as e:
+            logger.error(f"LLM init failed: {str(e)}")
+            raise
+
+        try:
+            context = "\n".join([doc.page_content for doc in docs])
+            result = llm.invoke(f"Context: {context}\nPrompt: {FIXED_PROMPT}")
+            logger.info("AI invocation successful")
+            
+            # Parse and validate response
+            ai_response = result.content
+            if not ai_response:
+                raise ValueError("Empty response from AI")
+                
+            marks_match = re.search(r"Marks:\s*(\d{1,3})/100", ai_response, re.IGNORECASE)
+            marks = marks_match.group(1) if marks_match else None
+            
+            if not marks or not marks.isdigit():
+                raise ValueError("Invalid marks format in response")
+                
+            return {
+                "marks": f"{marks}/100",
+                "feedback": re.sub(r"Marks:\s*\d{1,3}/100", "", ai_response).strip(),
+                "raw_response": ai_response  # For debugging
+            }
+            
+        except Exception as e:
+            logger.error(f"AI processing failed: {str(e)}")
+            raise
+
+    except Exception as e:
+        logger.error(f"AI pipeline failed: {traceback.format_exc()}")
+        raise Exception(f"AI processing error: {str(e)}")
 // =====================
 // Security Middlewares
 // =====================
