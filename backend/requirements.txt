@@ -47,7 +47,7 @@ urllib3==2.3.0
 gunicorn
 langchain-google-genai
 langchain_community
-langchain-huggingface
+langchain-huggingface==0.1.0
 sentence-transformers
 pypdf
 pdf2image
