@@ -1,24 +1,22 @@
-import express from 'express';
-import multer from 'multer';
-import cors from 'cors';
-import { exec } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// 1. First define allowedOrigins at the top level
 const allowedOrigins = [
   "https://www.eduai2025.app",
   "https://eduai2025.app",
   process.env.NODE_ENV === "development" && "http://localhost:3000"
 ].filter(Boolean);
 
+// Rest of your existing code using CommonJS syntax...
+// (Keep all your route handlers and logic the same,
+// just change the import/export syntax to require/module.exports)
 // 2. Then use it in CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
