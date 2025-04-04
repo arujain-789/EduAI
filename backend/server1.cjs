@@ -131,7 +131,7 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 function processPDF(filePath) {
   return new Promise((resolve, reject) => {
     const pythonProcess = spawn('python3', [
-      path.join(__dirname, 'grader.py'),
+      path.join(__dirname, 'server.py'),
       filePath
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
