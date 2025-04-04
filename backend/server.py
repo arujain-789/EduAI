@@ -14,6 +14,8 @@ import gc
 import torch
 from tenacity import retry, stop_after_attempt, wait_exponential
 from google.cloud import storage
+import requests
+import io
 
 # Third-party imports
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -55,6 +57,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def download_pdf(signed_url, local_path="temp.pdf"):
+    response = requests.get(signed_url)
+    if response.status_code == 200:
+        with open(local_path, "wb") as f:
+            f.write(response.content)
+        return local_path
+    else:
+        raise Exception("Failed to download PDF")
 # =====================
 # Custom Exceptions
 # =====================
@@ -371,24 +382,26 @@ Please provide:
 # =====================
 def main():
     try:
-        # Validate input
         if len(sys.argv) < 2:
             raise ValueError("Usage: python pdf_processor.py <pdf_path_or_url> [output_file]")
         
-        pdf_input = sys.argv[1]
+        input_path_or_url = sys.argv[1]
         output_file = sys.argv[2] if len(sys.argv) > 2 else None
         
-        logger.info(f"Starting processing for: {pdf_input}")
+        logger.info(f"Starting processing for: {input_path_or_url}")
         
         with PDFProcessor() as processor:
-            # Process input (URL or file path)
-            if pdf_input.startswith(('http://', 'https://')):
-                pdf_content = processor.download_pdf(pdf_input)
-                pdf_path = processor.create_temp_file(pdf_content)
+            if input_path_or_url.startswith("http://") or input_path_or_url.startswith("https://"):
+                pdf_bytes = processor.download_pdf(input_path_or_url)
+                with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(pdf_bytes)
+                    pdf_path = tmp.name
+                    processor.temp_files.append(pdf_path)
+            elif os.path.isfile(input_path_or_url):
+                pdf_path = input_path_or_url
             else:
-                pdf_path = pdf_input
+                raise ValueError("Invalid input: must be a local file or HTTPS URL")
             
-            # Extract and process text
             extracted_text = processor.extract_text(pdf_path)
             logger.info(f"Extracted {len(extracted_text)} characters")
             
@@ -397,17 +410,14 @@ def main():
                     f"Insufficient text extracted (min {processor.config.MIN_TEXT_LENGTH} chars required)"
                 )
             
-            # Generate AI feedback
             result = processor.process_with_ai(extracted_text)
             logger.info("Processing completed successfully")
             
-            # Output results
             output = json.dumps(result, indent=2)
             if output_file:
                 with open(output_file, 'w') as f:
                     f.write(output)
             print(output)
-            
             return 0
             
     except PDFProcessingError as e:
@@ -433,3 +443,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
