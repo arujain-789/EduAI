@@ -38,16 +38,27 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // ✅ Explicitly Set CORS Headers (Preflight Handling)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "https://www.eduai2025.app");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  res.header("Access-Control-Allow-Credentials", "true");
+ // Only set the allowed origin if it's in our whitelist
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
   
-  if (req.method === "OPTIONS") return res.sendStatus(200);
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Vary", "Origin"); // Important for caching
+  
+  // Cache preflight response for 2 hours (Chromium default)
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Max-Age", "7200");
+    return res.sendStatus(204);
+  }
   
   next();
-});
+;
 
 // ✅ Multer Storage Configuration (for memory storage)
 const upload = multer({
