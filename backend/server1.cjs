@@ -1,121 +1,134 @@
 const express = require("express");
 const multer = require("multer");
-const { Storage } = require("@google-cloud/storage");
-const cors = require('cors');
-const { v4: uuidv4 } = require("uuid");
+const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 const { exec } = require("child_process");
-
 const app = express();
-app.set('trust proxy', true);
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+const { Storage } = require("@google-cloud/storage");
+require('dotenv').config();
+const allowedOrigins = [
+  "http://localhost:5173",       // your local frontend (Vite, etc.)
+  "https://www.eduai2025.app"
+    "https://eduai2025.app"        // your deployed frontend
+];
 
-// ✅ Decode Service Account Credentials from Base64 (Render)
-creds_json = os.getenv('GCS_CREDENTIALS')
-credentials = service_account.Credentials.from_service_account_info(
-    json.loads(creds_json))
-let credentials;
-try {
-  const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, "base64").toString("utf-8");
-  credentials = JSON.parse(credentialsJSON);
-} catch (error) {
-  console.error("❌ Error parsing Google Cloud credentials:", error.message);
-  process.exit(1);
-}
-
-// ✅ Google Cloud Storage Configuration
-const storage = new Storage({ credentials });
-const bucketName = process.env.BUCKET_NAME || "your-bucket-name";
-const bucket = storage.bucket(bucketName);
-const pythonScriptPath = process.env.PYTHON_SCRIPT_PATH || "./server.py";
-const apiRouter = express.Router();
-
-// ✅ Middleware
 app.use(cors({
-  origin: ['https://www.eduai2025.app', 'https://eduai2025.app'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  credentials: true
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "DELETE"], // restrict to used HTTP methods
+  allowedHeaders: ["Content-Type"],   // optional: restrict headers
+  credentials: true                   // optional: allow cookies (if needed)
 }));
 app.use(express.json());
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+app.use(express.static("uploads"));
+const gcs = new Storage({
+  credentials: JSON.parse(process.env.GCS_CREDENTIALS),
 });
+const bucketName = 'your-bucket-name';
+const bucket = gcs.bucket(bucketName);
 
-// ✅ Upload Route
+// 🔹 Ensure "uploads" directory exists
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+// 🔹 Multer Storage Config
+const upload = multer({ storage: multer.memoryStorage() }); // ✅ Keeps file in memory only
+
+
+// 🔹 Upload PDF API
 app.post("/upload", upload.single("pdf"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "❌ No file uploaded!" });
+    if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded!" });
+    }
 
-  try {
-    const fileName = `uploads/${uuidv4()}-${req.file.originalname}`;
-    const file = bucket.file(fileName);
+    const gcsFilename = Date.now() + "-" + req.file.originalname;
+    const file = bucket.file(gcsFilename);
 
-    // Upload to GCS
-    await file.save(req.file.buffer, {
-      metadata: { contentType: req.file.mimetype },
+    const stream = file.createWriteStream({
+        resumable: false,
+        contentType: req.file.mimetype,
     });
 
-    // Generate signed URL
-    const [signedUrl] = await file.getSignedUrl({
-      action: "read",
-      expires: Date.now() + 3600000, // 1 hour
+    stream.on("error", (err) => {
+        console.error("❌ GCS Upload Error:", err);
+        res.status(500).json({ error: "Failed to upload to GCS" });
     });
 
-    // Call Python script
-    const command = `python3 ${pythonScriptPath} "${signedUrl}"`;
-    exec(command, (error, stdout, stderr) => {
-      if (error) return res.status(500).json({ error: `AI failed: ${stderr}` });
+    stream.on("finish", () => {
+        console.log(`✅ Uploaded to GCS: ${gcsFilename}`);
 
-      try {
-        const aiResponse = JSON.parse(stdout);
-        res.json({
-          message: "✅ Success!",
-          url: signedUrl,
-          filename: fileName,
-          marks: aiResponse.marks,
-          feedback: aiResponse.feedback
+        // OPTIONAL: Download file locally if your Python script still needs a file path
+        const localPath = path.join(__dirname, "uploads", gcsFilename);
+        file.download({ destination: localPath }).then(() => {
+            exec(`python server.py "${localPath}"`, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`❌ AI Processing Error: ${error.message}`);
+                    return res.status(500).json({ error: "AI processing failed!" });
+                }
+
+                console.log(`🔹 AI Output: ${stdout}`);
+                res.json({
+                    message: "File uploaded to GCS and AI processing completed!",
+                    filename: gcsFilename,
+                    gcs_url: `https://storage.googleapis.com/${bucketName}/${gcsFilename}`
+                });
+            });
+        }).catch(err => {
+            console.error("❌ GCS Download Error:", err);
+            res.status(500).json({ error: "Failed to download file for AI processing" });
         });
-      } catch (err) {
-        res.status(500).json({ error: "Invalid AI response" });
-      }
     });
 
-  } catch (err) {
-    console.error("❌ Upload Error:", err);
-    res.status(500).json({ error: "Upload failed" });
-  }
+    stream.end(req.file.buffer); // ✅ send buffer to GCS
 });
 
-// ✅ List Uploaded Files
-app.get("/list", async (req, res) => {
-  try {
-    const [files] = await bucket.getFiles({ prefix: "uploads/" });
-    res.json(files.map(file => file.name.split("/").pop()));
-  } catch (err) {
-    res.status(500).json([]);
-  }
-});
 
-// ✅ Add API Routes
-apiRouter.post('/upload', upload.single("pdf"), async (req, res) => { /* ... */ });
-apiRouter.get('/test', (req, res) => { /* ... */ });
-app.use('/api', apiRouter);
-
-// ✅ Check if the bucket exists before starting the server
-(async () => {
-  try {
-    const [exists] = await bucket.exists();
-    if (!exists) throw new Error(`Bucket ${bucketName} not found!`);
-
-    // ✅ Add Test Route
-    app.get('/test', (req, res) => {
-      res.json({ status: 'Backend connected', timestamp: new Date() });
+// 🔹 List Uploaded PDFs
+app.get("/list", (req, res) => {
+    fs.readdir(uploadDir, (err, files) => {
+        if (err) {
+            return res.status(500).json({ error: "Cannot list files." });
+        }
+        res.json(files.filter(f => f.endsWith(".pdf"))); // Return only PDFs
     });
+});
 
-    // ✅ Start Server
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-  } catch (err) {
-    console.error("❌ GCS Error:", err.message);
-    process.exit(1);
-  }
-})();
+// 🔹 Fetch AI Output (Marks & Feedback)
+app.get("/ai-output", (req, res) => {
+    const outputFile = path.join(uploadDir, "output.json");
+
+    fs.readFile(outputFile, "utf8", (err, data) => {
+        if (err) {
+            return res.status(500).json({ error: "Error reading AI output" });
+        }
+
+        const output = JSON.parse(data);
+        res.json({ marks: output.marks, feedback: output.feedback });
+    });
+});
+
+// 🔹 Serve HTML File (Frontend)
+app.use(express.static("public")); // Ensure the frontend is served
+
+// 🔹 Delete a File
+app.delete("/delete/:filename", (req, res) => {
+    const filePath = path.join(uploadDir, req.params.filename);
+
+    fs.unlink(filePath, err => {
+        if (err) {
+            return res.status(500).json({ error: "File deletion failed." });
+        }
+        res.json({ message: "File deleted successfully." });
+    });
+});
+
+// 🔹 Start Server
+app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
