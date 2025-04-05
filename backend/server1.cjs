@@ -9,7 +9,7 @@ require("dotenv").config();
 const outputPath = path.join(__dirname, "output.json");
 const fs = require("fs");
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors({ origin: "https://www.eduai2025.app" }));
 app.use(express.json());
