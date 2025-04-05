@@ -24,7 +24,7 @@ const bucketName = 'eduai2025storage';
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
   });
-  const bucket = gcs.bucket(bucketName);
+  const bucket = storage.bucket(bucketName);
 
 // 🔹 /upload route
 app.post("/upload", upload.single("pdf"), async (req, res) => {
