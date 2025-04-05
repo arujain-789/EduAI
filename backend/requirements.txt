@@ -54,3 +54,4 @@ pdf2image
 huggingface-hub
 datetime
 google-cloud-storage
+easyocr
