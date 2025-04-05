@@ -47,3 +47,4 @@ urllib3==2.3.0
 gunicorn
 langchain-google-genai
 langchain_community
+easyocr
