@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require("uuid");
 const { exec } = require("child_process");
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 
 // ✅ Decode Service Account Credentials from Base64 (Render)
