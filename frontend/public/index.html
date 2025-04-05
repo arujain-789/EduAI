@@ -245,7 +245,7 @@
         updateStatus("Grading complete", "success");
 
         document.getElementById('marks').textContent = response.marks || "N/A";
-        document.getElementById('feedback').textContent = response.feedback || "No feedback available.";
+        document.getElementById('feedback').textContent = response.aifeedback || "No feedback available.";
         document.getElementById('pdfLink').href = response.url || "#";
         resultsDiv.classList.remove('d-none');
 
