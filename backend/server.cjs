@@ -22,7 +22,7 @@ try {
 const storage = new Storage({ credentials });
 const bucketName = process.env.BUCKET_NAME || "your-bucket-name";
 const bucket = storage.bucket(bucketName);
-const pythonScriptPath = process.env.PYTHON_SCRIPT_PATH || "./server.py";
+const pythonScriptPath = process.env.PYTHON_SCRIPT_PATH || "server.py";
 
 // ✅ CORS Configuration
 app.use(cors({
