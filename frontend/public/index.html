@@ -245,13 +245,15 @@
         updateStatus("Grading complete", "success");
 
         document.getElementById('marks').textContent = response.marks || "N/A";
-        document.getElementById('feedback').textContent = response.aifeedback || "No feedback available.";
+        document.getElementById('feedback').textContent = response.aiFeedback || "No feedback available.";
         document.getElementById('pdfLink').href = response.url || "#";
         resultsDiv.classList.remove('d-none');
 
         if (response.filename) {
             addFileToList(response.filename, response.url);
             loadFileList();
+            console.log("✅ Server response:", response);
+
         }
     }
 
