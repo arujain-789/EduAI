@@ -10,7 +10,7 @@ const { Storage } = require("@google-cloud/storage");
 require('dotenv').config();
 const allowedOrigins = [
   "http://localhost:5173",       // your local frontend (Vite, etc.)
-  "https://www.eduai2025.app"
+  "https://www.eduai2025.app",
     "https://eduai2025.app"        // your deployed frontend
 ];
 
