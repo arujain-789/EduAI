@@ -16,7 +16,7 @@ app.use(express.json());
 
 // 🧠 Multer (memory storage - no disk)
 const upload = multer({ storage: multer.memoryStorage() });
-const credentials = JSON.parse(process.env.GCS_KEY_JSON);
+const credentials = JSON.parse(process.env.GCS_CREDENTIALS);
 
 const storage = new Storage({ credentials });
 const bucketName = 'eduai2025storage';
