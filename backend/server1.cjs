@@ -16,11 +16,9 @@ app.use(express.json());
 
 // 🧠 Multer (memory storage - no disk)
 const upload = multer({ storage: multer.memoryStorage() });
+const credentials = JSON.parse(process.env.GCS_KEY_JSON);
 
-// 🧠 GCS client
-const gcs = new Storage({
-    keyFilename: './gcloud-key.json',
-});
+const storage = new Storage({ credentials });
 const bucketName = 'eduai2025storage';
 
 app.get('/health', (req, res) => {
