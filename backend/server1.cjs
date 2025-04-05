@@ -57,7 +57,7 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 
         // 🔁 Call Python script with signed URL
         const command = `python server1.py "${signedUrl}"`;
-        exec(command, (error, stdout, stderr) => {
+        exec(command, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
           if (error) {
             console.error("❌ Python Error:", error.message);
             return res.status(500).json({ error: "AI failed" });
