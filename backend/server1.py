@@ -1,9 +1,7 @@
 import sys
 import json
 import os
-import easyocr
 import requests
-import easyocr
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -15,9 +13,6 @@ from google.cloud import vision
 import io
 import re
 sys.stdout.reconfigure(encoding='utf-8')
-
-# ✅ EasyOCR init
-reader = easyocr.Reader(['en'])
 
 # ✅ Get signed URL from CLI
 if len(sys.argv) < 2:
@@ -38,6 +33,7 @@ with open(local_pdf_path, "wb") as f:
     f.write(response.content)
 
 print(f"📄 Saved PDF to: {local_pdf_path}")
+
 def google_vision_ocr(image_path):
     """Extracts text from an image using Google Vision OCR."""
     client = vision.ImageAnnotatorClient()
@@ -55,10 +51,9 @@ FIXED_PROMPT = """
 You are a teacher grading an assignment. 
 1. Provide a small feedback on student improvement.
 2. Assign marks out of 100 in the format 'Marks: XX/100'.
-3. check leniently and give more marks. 
-4. don't consider handwriting when rewarding marks.
+3. Check leniently and give more marks. 
+4. Don't consider handwriting when rewarding marks.
 """
-
 
 # 🔹 Extract text normally
 extracted_text = ""
@@ -69,9 +64,9 @@ try:
 except Exception as e:
     print("Text extraction failed, switching to OCR:", str(e))
 
-# 🔹 If no text was found, use OCR
+# 🔹 If no text was found, use OCR with Google Vision API
 if not extracted_text.strip():
-    print("🔹 Using OCR to extract text from scanned PDF...")
+    print("🔹 Using Google Vision OCR to extract text from scanned PDF...")
 
     images = convert_from_path(local_pdf_path)
     extracted_text = ""
@@ -81,10 +76,7 @@ if not extracted_text.strip():
         img.save(img_path, "JPEG")
         
         try:
-            result = reader.readtext(img_path, detail=0)  # detail=0 returns plain text
-            text = "\n".join(result)
-
-
+            text = google_vision_ocr(img_path)
             extracted_text += text + "\n"
         except Exception as e:
             print(f"❌ OCR Error: {str(e)}")
@@ -103,7 +95,7 @@ if extracted_text.strip():
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", api_key="AIzaSyBFKPqM2mCU43VPvkOYQQwx62QrLNJwkpE")
     result = llm.invoke(input_prompt)
 
-# Safe fallback for AI response
+    # Safe fallback for AI response
     if hasattr(result, "content"):
         ai_response = result.content
     elif isinstance(result, str):
