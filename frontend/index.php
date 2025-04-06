@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduFlow</title>
+    <title>EduAI</title>
     <link rel="stylesheet" href="style.css" >
 </head>
 <body>
     <header class="header">
-        <div class="logo">EduFlow</div>
+        <div class="logo">EduAI</div>
         <div class="login-buttons">
             <a href="student-login.html" class="button">Student Login</a>
             <a href="teacherlogin.html" class="button">Teacher Login</a>
@@ -17,7 +17,7 @@
 
     <div class="front-page">
         <div class="logo-big">
-          <img src="Green Modern Abstract ball globe icons logo template.png">
+          <img src="Green Modern Abstract ball globe icons logo template (3).png">
         </div>
     </div>
 
