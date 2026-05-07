@@ -116,12 +116,6 @@ EDUAI was designed as more than a technical experiment, it focuses on practical 
 
 ---
 
-## 📷 Project Demo
-
-> Add screenshots, OCR workflow visuals, system UI, or processing examples here.
-
----
-
 ## 🧠 Key Learnings
 
 Through EDUAI, I strengthened my understanding of:
